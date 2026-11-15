@@ -12,7 +12,7 @@ esphome:
   friendly_name: Tidbyt Minimal Bose
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.6"
+    version: "0.4.7"
   on_boot:
     priority: -100
     then:
@@ -21,12 +21,19 @@ esphome:
       - delay: 35s
       - if:
           condition:
-            lambda: 'return id(bose_source).is_deferred() || !id(bose_source).is_started();'
+            # Fallback only if BT is unavailable AND there is enough DMA-
+            # capable internal DRAM for I2S buffers (v0.4.6 crashed here).
+            lambda: |-
+              return (id(bose_source).is_deferred() || !id(bose_source).is_started())
+                  && id(bose_source).dma_heap() > 48000;
           then:
-            - logger.log: "Bluetooth unavailable/deferred: starting onboard I2S speaker fallback"
+            - logger.log: "Bluetooth unavailable: starting onboard I2S speaker fallback"
             - media_player.play_media:
                 id: onboard_speaker
                 media_url: "${tonearm_base}/api/audio/stream.mp3?api_key=${tonearm_key}"
+          else:
+            - logger.log: |-
+                Audio unavailable: BT deferred and not enough DMA-capable internal RAM for I2S; display-only mode
   includes:
     - external_components/art_buf.h
   platformio_options:
@@ -48,8 +55,7 @@ esp32:
   flash_size: 16MB
   framework:
     type: arduino
-  # Gen 2 is 8MB flash. This leaves room for the display + A2DP + onboard
-  # I2S fallback image (current 2MB-slot image limit is too tight).
+  # GD25Q128 = 16MB physical (verified via serial bridge flash_id).
   partitions: /home/user/tonearm/firmware/tidbyt-nowplaying/dual_ota_8mb.csv
 
 # Gen 2 speaker is on the second I2S peripheral. This is the proven
@@ -80,6 +86,20 @@ ota:
   - platform: http_request
 http_request:
   verify_ssl: false
+  # Artwork backdrop is 4096 bytes; default RX buffer truncated the body to
+  # 1000 bytes so bd_have never became true (the "no artwork" bug).
+  buffer_size_rx: 4608
+  # Backdrop endpoint may miss its cache on a fresh track; default 4.5s
+  # timed out once already.
+  timeout: 10s
+
+# Not needed (no api/web_server use); frees internal DRAM for BT/audio.
+mdns:
+  disabled: true
+
+logger:
+  # Small task log buffer: internal DRAM is the scarce resource here.
+  task_log_buffer_size: 256
 
 update:
   - platform: http_request
@@ -113,12 +133,13 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.6"
+            version: "0.4.7"
             ip: !lambda 'return std::string(WiFi.localIP().toString().c_str());'
             wifi_rssi: !lambda 'return std::to_string(WiFi.RSSI());'
             free_heap: !lambda 'return std::to_string(ESP.getFreeHeap());'
             internal_heap: !lambda 'return std::to_string(id(bose_source).internal_heap());'
             internal_largest_block: !lambda 'return std::to_string(id(bose_source).largest_internal_block());'
+            dma_heap: !lambda 'return std::to_string(id(bose_source).dma_heap());'
             bt_deferred: !lambda 'return id(bose_source).is_deferred() ? "true" : "false";'
             bt_started: !lambda 'return id(bose_source).is_started() ? "true" : "false";'
             uptime_s: !lambda 'return std::to_string(millis() / 1000);'
