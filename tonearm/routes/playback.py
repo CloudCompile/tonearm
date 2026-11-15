@@ -15,6 +15,7 @@ router = APIRouter(prefix="/playback", tags=["playback"])
 
 _background_cache: dict[str, bytes] = {}
 _tile_cache: dict[str, bytes] = {}
+_raw_cache: dict[str, bytes] = {}
 
 
 @router.get("/artwork-tile", include_in_schema=False)
@@ -46,6 +47,55 @@ def artwork_tile():
         raise
     except Exception as e:
         raise HTTPException(502, f"artwork tile unavailable: {e}")
+
+
+@router.get("/artwork-raw", include_in_schema=False)
+def artwork_raw(size: int = 32, mode: str = "split"):
+    """The current cover as raw RGB565 big-endian pixels.
+    mode=split: size x size sharp tile (art half of the panel).
+    mode=backdrop: 64x32 blurred + dimmed full-panel backdrop; text floats
+    on top. The constrained Tidbyt cannot decode JPEG; this serves
+    blit-ready bytes. Cached per artwork URL like the tile endpoint."""
+    try:
+        now = mk.now_playing()
+        url = now.get("artworkUrl") or ""
+        if not url:
+            raise HTTPException(404, "no artwork")
+        url = url.replace("{w}", str(size * 4)).replace("{h}", str(size * 4))
+        key = f"{mode}:{size}:{url}"
+        if key not in _raw_cache:
+            with urlopen(url, timeout=15) as r:
+                source = r.read(300_000)
+            image = Image.open(BytesIO(source)).convert("RGB")
+            if mode == "backdrop":
+                image = ImageOps.fit(image, (64, 32), method=Image.Resampling.LANCZOS)
+                # HUB75 is built at 2-bit color depth. Keep enough brightness
+                # to survive that quantization; text gets its own black shadow.
+                image = image.filter(ImageFilter.GaussianBlur(0.9))
+                image = Image.eval(image, lambda v: int(v * 0.82))
+                w, h = 64, 32
+            else:
+                image = ImageOps.fit(image, (size, size), method=Image.Resampling.LANCZOS)
+                w, h = size, size
+            pixels = image.tobytes()  # RGB, row-major
+            out = bytearray(w * h * 2)
+            for i in range(w * h):
+                r5 = pixels[i * 3] >> 3
+                g6 = pixels[i * 3 + 1] >> 2
+                b5 = pixels[i * 3 + 2] >> 3
+                v = (r5 << 11) | (g6 << 5) | b5
+                out[i * 2] = v >> 8
+                out[i * 2 + 1] = v & 0xFF
+            _raw_cache[key] = bytes(out)
+            if len(_raw_cache) > 4:
+                for old in list(_raw_cache)[:-2]:
+                    del _raw_cache[old]
+        return Response(_raw_cache[key], media_type="application/octet-stream",
+                        headers={"Cache-Control": "public, max-age=3600"})
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"artwork raw unavailable: {e}")
 
 
 @router.get("/artwork-background", include_in_schema=False)

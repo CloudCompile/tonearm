@@ -20,6 +20,10 @@ class TidbytA2DPSource : public esphome::Component {
   void loop() override;
   float get_setup_priority() const override { return esphome::setup_priority::AFTER_WIFI; }
   void dump_config() override;
+  bool is_deferred() const { return deferred_; }
+  bool is_started() const { return started_; }
+  unsigned internal_heap() const;
+  unsigned largest_internal_block() const;
 
  protected:
   static TidbytA2DPSource *instance_;
@@ -29,7 +33,9 @@ class TidbytA2DPSource : public esphome::Component {
   bool connect_stream(WiFiClient &client);
   int read_stream_bytes(WiFiClient &client, uint8_t *buffer, size_t capacity);
 
-  static constexpr unsigned kMinHeapForBt = 150 * 1024;
+  // BTU needs internal DRAM and a contiguous block; total free heap includes
+  // PSRAM and is not a valid measure for this preflight.
+  static constexpr unsigned kMinHeapForBt = 180 * 1024;
   BluetoothA2DPSource source_;
   std::string device_name_;
   std::string url_;
@@ -41,6 +47,7 @@ class TidbytA2DPSource : public esphome::Component {
   unsigned long boot_ms_{0};
   bool started_{false};
   bool failed_{false};
+  bool deferred_{false};
 };
 
 }  // namespace tidbyt_a2dp

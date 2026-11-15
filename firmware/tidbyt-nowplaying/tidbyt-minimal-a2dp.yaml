@@ -12,20 +12,28 @@ esphome:
   friendly_name: Tidbyt Minimal Bose
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.0"
+    version: "0.4.4"
   on_boot:
     priority: -100
     then:
       - delay: 15s
       - script.execute: report_status
+      - delay: 35s
+      - if:
+          condition:
+            lambda: 'return id(bose_source).is_deferred() || !id(bose_source).is_started();'
+          then:
+            - logger.log: "Bluetooth unavailable/deferred: starting onboard I2S speaker fallback"
+            - media_player.play_media:
+                id: onboard_speaker
+                media_url: "${tonearm_base}/api/audio/stream.mp3?api_key=${tonearm_key}"
   includes:
     - external_components/art_buf.h
   platformio_options:
     build_flags:
       - "-DFORCE_COLOR_DEPTH=2"
       - "-DBOARD_HAS_PSRAM"
-    # WROVER-class module: PSRAM QSPI. This memory type makes Arduino
-    # initialize the PSRAM (16MB-flash Gen 2 board).
+    # Gen 2 WROVER-class module: PSRAM QSPI; official board has 8MB flash.
     board_build.arduino.memory_type: qio_qspi
   libraries:
     - "ESP32-A2DP=https://github.com/pschatzmann/ESP32-A2DP"
@@ -38,6 +46,23 @@ esp32:
   # to PlatformIO, which resolves it relative to the build dir — our e2b
   # pipeline always clones the repo to /home/user/tonearm.
   partitions: /home/user/tonearm/firmware/tidbyt-nowplaying/dual_ota.csv
+
+# Gen 2 speaker is on the second I2S peripheral. This is the proven
+# community configuration; it coexists with the HUB75 display.
+i2s_audio:
+  - id: onboard_i2s
+    i2s_lrclk_pin: GPIO13
+    i2s_bclk_pin: GPIO12
+
+media_player:
+  - platform: i2s_audio
+    id: onboard_speaker
+    name: "Tidbyt Onboard Speaker"
+    i2s_audio_id: onboard_i2s
+    dac_type: external
+    i2s_dout_pin: GPIO14
+    mode: mono
+    volume_initial: 0.20
 
 external_components:
   - source: github://TillFleisch/ESPHome-HUB75-MatrixDisplayWrapper@main
@@ -56,7 +81,9 @@ update:
   - platform: http_request
     id: remote_firmware
     name: "Tidbyt Remote Firmware"
-    source: !secret ota_manifest_url
+    # Tonearm Apple Music + Bose manifest only. Never point this firmware at
+    # the separate Panel OS manifest.
+    source: "http://20.221.210.24/tidbyt-updates/bootstrap/manifest.json"
     update_interval: 30min
     on_update_available:
       then:
@@ -82,10 +109,14 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.0"
+            version: "0.4.4"
             ip: !lambda 'return std::string(WiFi.localIP().toString().c_str());'
             wifi_rssi: !lambda 'return std::to_string(WiFi.RSSI());'
             free_heap: !lambda 'return std::to_string(ESP.getFreeHeap());'
+            internal_heap: !lambda 'return std::to_string(id(bose_source).internal_heap());'
+            internal_largest_block: !lambda 'return std::to_string(id(bose_source).largest_internal_block());'
+            bt_deferred: !lambda 'return id(bose_source).is_deferred() ? "true" : "false";'
+            bt_started: !lambda 'return id(bose_source).is_started() ? "true" : "false";'
             uptime_s: !lambda 'return std::to_string(millis() / 1000);'
             reset_reason: !lambda 'return std::to_string((int) esp_reset_reason());'
             ota_status: "checking"
@@ -134,10 +165,21 @@ interval:
           on_response:
             then:
               - lambda: |-
-                  if (response->status_code != 200) return;
-                  if (body.size() < 64 * 32 * 2) return;
+                  if (response->status_code != 200) {
+                    ESP_LOGW("art", "backdrop HTTP %d", response->status_code);
+                    return;
+                  }
+                  if (body.size() < 64 * 32 * 2) {
+                    ESP_LOGW("art", "short backdrop body: %u bytes", (unsigned) body.size());
+                    return;
+                  }
                   memcpy(bd_buf, body.data(), 64 * 32 * 2);
                   bd_have = true;
+                  ESP_LOGI("art", "backdrop loaded bytes=%u first=%02x%02x last=%02x%02x",
+                           (unsigned) body.size(), bd_buf[0], bd_buf[1],
+                           bd_buf[4094], bd_buf[4095]);
+                  ESP_LOGI("art", "backdrop loaded: %u bytes, first=%02x%02x",
+                           (unsigned) body.size(), bd_buf[0], bd_buf[1]);
   - interval: 5s
     then:
       - http_request.get:
@@ -161,7 +203,7 @@ display:
   - platform: hub75_matrix_display
     id: matrix
     driver: FM6126A
-    i2sspeed: HZ_8M
+    i2sspeed: HZ_10M
     clock_phase: false
     latch_blanking: 1
     width: 64
