@@ -71,7 +71,9 @@ def artwork_raw(size: int = 32, mode: str = "split"):
                 image = ImageOps.fit(image, (64, 32), method=Image.Resampling.LANCZOS)
                 # HUB75 is built at 2-bit color depth. Keep enough brightness
                 # to survive that quantization; text gets its own black shadow.
-                image = image.filter(ImageFilter.GaussianBlur(0.9))
+                # Minimal blur: just enough to tame 2-bit banding, so the
+                # artwork stays recognizable.
+                image = image.filter(ImageFilter.GaussianBlur(0.35))
                 image = Image.eval(image, lambda v: int(v * 0.82))
                 w, h = 64, 32
             else:
