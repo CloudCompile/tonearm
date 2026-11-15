@@ -82,8 +82,6 @@ external_components:
     components: [tidbyt_a2dp]
 
 logger:
-  # Small task log buffer: internal DRAM is the scarce resource here.
-  task_log_buffer_size: 256
 ota:
   - platform: http_request
 http_request:
