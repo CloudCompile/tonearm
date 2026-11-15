@@ -12,7 +12,7 @@ esphome:
   friendly_name: Tidbyt Minimal Bose
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.11"
+    version: "0.4.12"
   on_boot:
     priority: -100
     then:
@@ -45,7 +45,6 @@ esphome:
     - external_components/art_buf.h
   platformio_options:
     build_flags:
-      - "-DFORCE_COLOR_DEPTH=2"
       - "-DBOARD_HAS_PSRAM"
     # Gen 2 WROVER-class module: PSRAM QSPI. Physical flash chip is a
     # GigaDevice GD25Q128 (JEDEC id 0x1840c8) = 16MB — verified via the
@@ -78,9 +77,6 @@ media_player:
     dac_type: external
     i2s_dout_pin: GPIO14
     mode: mono
-
-external_components:
-  - source: github://TillFleisch/ESPHome-HUB75-MatrixDisplayWrapper@main
 
 logger:
 ota:
@@ -122,7 +118,7 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.11"
+            version: "0.4.12"
             ip: !lambda 'return std::string(WiFi.localIP().toString().c_str());'
             wifi_rssi: !lambda 'return std::to_string(WiFi.RSSI());'
             free_heap: !lambda 'return std::to_string(ESP.getFreeHeap());'
@@ -221,29 +217,35 @@ interval:
                   });
 
 display:
-  - platform: hub75_matrix_display
+  # Native ESPHome hub75 driver (2025.12+; based on stuartparmenter's
+  # hub75-esp32, the tech behind the real Tidbyt firmware). Replaces the
+  # third-party hub75_matrix_display wrapper whose 8MHz clock cap and
+  # update-interval-coupled refresh caused the visible rolling/flicker.
+  - platform: hub75
     id: matrix
-    driver: FM6126A
-    # HZ_20M breaks FM6126A timing (rainbow smudge) — this panel's ceiling is 8MHz.
-    i2sspeed: HZ_10M
+    panel_width: 64
+    panel_height: 32
+    shift_driver: FM6126A
+    clock_speed: 10MHZ
     clock_phase: false
     latch_blanking: 1
-    width: 64
-    height: 32
-    R1_pin: 5
-    G1_pin: 23
-    B1_pin: 4
-    R2_pin: 2
-    G2_pin: 22
-    B2_pin: 32
-    A_pin: 25
-    B_pin: 21
-    C_pin: 26
-    D_pin: 19
-    LAT_pin: 18
-    OE_pin: 27
-    CLK_pin: 15
-    update_interval: 200ms
+    bit_depth: 6
+    brightness: 160
+    double_buffer: true
+    r1_pin: GPIO5
+    g1_pin: GPIO23
+    b1_pin: GPIO4
+    r2_pin: GPIO2
+    g2_pin: GPIO22
+    b2_pin: GPIO32
+    a_pin: GPIO25
+    b_pin: GPIO21
+    c_pin: GPIO26
+    d_pin: GPIO19
+    lat_pin: GPIO18
+    oe_pin: GPIO27
+    clk_pin: GPIO15
+    update_interval: 50ms
     lambda: |-
       // NOTE: the wrapper clears its buffer before every call, so there is
       // no cheap "skip if unchanged" path — a skipped frame renders black.
