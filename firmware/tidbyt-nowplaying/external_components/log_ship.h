@@ -21,8 +21,8 @@ static bool ta_log_in_sink = false;
 static void ta_log_append(uint8_t level, const char *tag, const char *msg) {
   if (ta_log_in_sink)
     return;  // our own shipping logs do not recurse into the batch
-  if (ta_log_batch.size() > 8192)
-    return;  // batch full — newest lines win next tick
+  if (ta_log_batch.size() > 16384)
+    return;  // batch full — newest lines win next tick (16KB)
   static const char LEVEL_CHARS[] = {'N', 'E', 'W', 'I', 'D', 'V', 'V'};
   char lvl = (level < sizeof(LEVEL_CHARS)) ? LEVEL_CHARS[level] : '?';
   std::string line = esphome::str_sprintf("[%c][%s] %s", lvl, tag, msg);

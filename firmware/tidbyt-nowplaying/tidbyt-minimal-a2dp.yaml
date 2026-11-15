@@ -12,7 +12,7 @@ esphome:
   friendly_name: Tidbyt Minimal Bose
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.14"
+    version: "0.4.15"
   on_boot:
     priority: -100
     then:
@@ -116,7 +116,9 @@ logger:
   # is what makes ESPHome emit USE_LOG_LISTENERS (and real listener slots);
   # without it add_log_callback is a compiled-out no-op stub.
   on_message:
-    level: DEBUG
+    # INFO: DEBUG is dominated by http_request header spam; INFO keeps
+    # component setup lines (hub75 init, speaker pipeline) which is the point
+    level: INFO
     then:
       - lambda: 'ta_log_append(level, tag, message);'
 ota:
@@ -158,7 +160,7 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.14"
+            version: "0.4.15"
             # IDF port (v0.4.12): ip comes from the wifi_info text_sensor
             # (network::get_ip_address doesn't exist in 2026.x); heap_caps /
             ip: !lambda 'return id(ip_state);'
@@ -238,7 +240,7 @@ interval:
   # v0.4.13: ship log lines over WiFi — no serial page, ever. First tick
   # registers the logger sink (loop context = logger ready), later ticks
   # POST whatever accumulated since the last successful batch.
-  - interval: 5s
+  - interval: 3s
     then:
       - if:
           condition:
@@ -256,7 +258,7 @@ interval:
   - interval: 10s
     then:
       - http_request.get:
-          url: "${tonearm_base}/api/device/tidbyt/cmd?device=tidbyt-a2dp&version=0.4.14&api_key=${tonearm_key}"
+          url: "${tonearm_base}/api/device/tidbyt/cmd?device=tidbyt-a2dp&version=0.4.15&api_key=${tonearm_key}"
           capture_response: true
           max_response_buffer_size: 1kB
           on_response:
