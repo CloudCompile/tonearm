@@ -2,6 +2,7 @@
 
 #include <WiFi.h>
 #include <esp_bt.h>
+#include <esp_heap_caps.h>
 #include <cstring>
 
 namespace tidbyt_a2dp {
@@ -17,9 +18,10 @@ void TidbytA2DPSource::setup() {
   // Free the BLE-only controller memory now (we only use BT Classic).
   // This must happen before the controller is initialized.
   esp_err_t rel = esp_bt_controller_mem_release(ESP_BT_MODE_BLE);
-  ESP_LOGI("tidbyt_a2dp", "BLE memory release: %s (heap now %u)",
+  ESP_LOGI("tidbyt_a2dp", "BLE memory release: %s (heap total %u, internal %u)",
            rel == ESP_OK ? "released" : "skipped",
-           (unsigned) esp_get_free_heap_size());
+           (unsigned) esp_get_free_heap_size(),
+           (unsigned) heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT));
   // BT Classic's BTU host task needs a large contiguous heap slice. The
   // HUB75 DMA buffers + WiFi + ESPHome runtime leave less than that right
   // after boot, and if BTU startup fails IDF 5.x crashes in its own
@@ -32,18 +34,25 @@ void TidbytA2DPSource::setup() {
 void TidbytA2DPSource::loop() {
   if (started_ || failed_) return;
   if (millis() - boot_ms_ < 10000) return;   // let WiFi/HTTP settle first
-  unsigned heap = esp_get_free_heap_size();
-  if (heap < kMinHeapForBt) {
+  unsigned total_heap = esp_get_free_heap_size();
+  unsigned internal_heap = this->internal_heap();
+  unsigned largest_block = this->largest_internal_block();
+  // Bluetooth controller/host allocations must be internal DRAM. PSRAM in
+  // ESP.getFreeHeap() is NOT a valid preflight for Bluedroid's queues/tasks.
+  if (internal_heap < kMinHeapForBt || largest_block < kMinHeapForBt) {
+    deferred_ = true;
     // Still too tight — report via telemetry and retry on the next loops.
     static unsigned last_log = 0;
     if (millis() - last_log > 30000) {
-      ESP_LOGW("tidbyt_a2dp", "deferring BT start, heap only %u (need %u)",
-               heap, (unsigned) kMinHeapForBt);
+      ESP_LOGW("tidbyt_a2dp", "deferring BT: internal %u, largest block %u, total %u (need >=%u internal and contiguous)",
+               internal_heap, largest_block, total_heap, (unsigned) kMinHeapForBt);
       last_log = millis();
     }
     return;
   }
-  ESP_LOGI("tidbyt_a2dp", "starting A2DP source, heap %u", heap);
+  ESP_LOGI("tidbyt_a2dp", "starting A2DP: internal heap %u, total %u",
+           internal_heap, total_heap);
+  deferred_ = false;
   started_ = true;
   source_.start(device_name_.c_str());
   xTaskCreatePinnedToCore(TidbytA2DPSource::stream_task, "tidbyt_pcm",

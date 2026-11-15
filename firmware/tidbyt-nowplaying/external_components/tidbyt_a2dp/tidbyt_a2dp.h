@@ -2,6 +2,7 @@
 
 #include <Arduino.h>
 #include <WiFi.h>
+#include <esp_heap_caps.h>
 #include <BluetoothA2DPSource.h>
 #include <deque>
 #include <mutex>
@@ -22,8 +23,12 @@ class TidbytA2DPSource : public esphome::Component {
   void dump_config() override;
   bool is_deferred() const { return deferred_; }
   bool is_started() const { return started_; }
-  unsigned internal_heap() const;
-  unsigned largest_internal_block() const;
+  unsigned internal_heap() const {
+    return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  }
+  unsigned largest_internal_block() const {
+    return heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+  }
 
  protected:
   static TidbytA2DPSource *instance_;

@@ -30,6 +30,10 @@ class DeviceReport(BaseModel):
     state: str | None = Field(default=None, max_length=64)
     psram_bytes: str | None = Field(default=None, max_length=20)
     flash_bytes: str | None = Field(default=None, max_length=20)
+    internal_heap: str | None = Field(default=None, max_length=20)
+    internal_largest_block: str | None = Field(default=None, max_length=20)
+    bt_deferred: str | None = Field(default=None, max_length=8)
+    bt_started: str | None = Field(default=None, max_length=8)
 
 
 class DeviceAck(BaseModel):
