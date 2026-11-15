@@ -1,0 +1,305 @@
+# Tidbyt minimal dual test: HUB75 monochrome + Bose A2DP source.
+# No artwork, lyrics, web server, captive portal, or extra image buffers.
+
+substitutions:
+  tonearm_base: "http://20.221.210.24/tidbyt-relay"
+  tonearm_key: "toneark_jEpy8GG1FBoTt4BApgDgZIZxTlYkpBcq"
+  playlist_1_id: "p.0YU08k07L9"
+  playlist_2_id: "p.KoKOBXDS3Wm3o9P"
+
+esphome:
+  name: tidbyt-minimal-a2dp
+  friendly_name: Tidbyt Tonearm Rescue
+  project:
+    name: cloudcompile.tonearm_tidbyt
+    version: "0.4.5"
+  on_boot:
+    priority: -100
+    then:
+      - delay: 15s
+      - script.execute: report_status
+  includes:
+    - external_components/art_buf.h
+  platformio_options:
+    build_flags:
+      - "-DFORCE_COLOR_DEPTH=2"
+      - "-DBOARD_HAS_PSRAM"
+    # Gen 2 WROVER-class module: PSRAM QSPI; official board has 8MB flash.
+    board_build.arduino.memory_type: qio_qspi
+
+esp32:
+  board: esp32dev
+  framework:
+    type: arduino
+  # Serial logs report a 4MB chip. Use the verified 4MB-compatible dual OTA
+  # table; do not flash the 8MB table onto this hardware.
+  partitions: /home/user/tonearm/firmware/tidbyt-nowplaying/dual_ota.csv
+
+
+external_components:
+  - source: github://TillFleisch/ESPHome-HUB75-MatrixDisplayWrapper@main
+
+logger:
+ota:
+  - platform: http_request
+http_request:
+  verify_ssl: false
+
+update:
+  - platform: http_request
+    id: remote_firmware
+    name: "Tidbyt Remote Firmware"
+    # Tonearm Apple Music + Bose manifest only. Never point this firmware at
+    # the separate Panel OS manifest.
+    source: "http://20.221.210.24/tidbyt-updates/bootstrap/manifest.json"
+    update_interval: 30min
+    on_update_available:
+      then:
+        - update.perform:
+            id: remote_firmware
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+script:
+  - id: report_status
+    mode: restart
+    then:
+      - http_request.post:
+          url: "${tonearm_base}/api/device/tidbyt/report?api_key=${tonearm_key}"
+          request_headers:
+            Content-Type: "application/json"
+          json:
+            device: "tidbyt-status"
+            version: "0.4.5"
+            ip: !lambda 'return std::string(WiFi.localIP().toString().c_str());'
+            wifi_rssi: !lambda 'return std::to_string(WiFi.RSSI());'
+            free_heap: !lambda 'return std::to_string(ESP.getFreeHeap());'
+            uptime_s: !lambda 'return std::to_string(millis() / 1000);'
+            reset_reason: !lambda 'return std::to_string((int) esp_reset_reason());'
+            ota_status: "checking"
+            state: "tonearm-rescue"
+            psram_bytes: !lambda |-
+              return std::to_string(ESP.getPsramSize());
+            flash_bytes: !lambda |-
+              return std::to_string(ESP.getFlashChipSize());
+      - delay: 60s
+      - script.execute: report_status
+
+text_sensor:
+  - platform: template
+    id: np_title
+    lambda: 'return {id(title_state)};'
+  - platform: template
+    id: np_artist
+    lambda: 'return {id(artist_state)};'
+
+globals:
+  - id: title_state
+    type: std::string
+    initial_value: '"starting up"'
+  - id: album_state
+    type: std::string
+    initial_value: '"tonearm"'
+  - id: artist_state
+    type: std::string
+    initial_value: '""'
+  - id: elapsed_ms
+    type: int
+    initial_value: '0'
+  - id: duration_ms
+    type: int
+    initial_value: '0'
+  - id: playing
+    type: bool
+    initial_value: 'false'
+
+interval:
+  - interval: 10s
+    then:
+      - http_request.get:
+          url: "${tonearm_base}/api/playback/artwork-raw?mode=backdrop&api_key=${tonearm_key}"
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  if (response->status_code != 200) {
+                    ESP_LOGW("art", "backdrop HTTP %d", response->status_code);
+                    return;
+                  }
+                  if (body.size() < 64 * 32 * 2) {
+                    ESP_LOGW("art", "short backdrop body: %u bytes", (unsigned) body.size());
+                    return;
+                  }
+                  memcpy(bd_buf, body.data(), 64 * 32 * 2);
+                  bd_have = true;
+                  ESP_LOGI("art", "backdrop loaded bytes=%u first=%02x%02x last=%02x%02x",
+                           (unsigned) body.size(), bd_buf[0], bd_buf[1],
+                           bd_buf[4094], bd_buf[4095]);
+                  ESP_LOGI("art", "backdrop loaded: %u bytes, first=%02x%02x",
+                           (unsigned) body.size(), bd_buf[0], bd_buf[1]);
+  - interval: 5s
+    then:
+      - http_request.get:
+          url: "${tonearm_base}/api/playback/now-playing?api_key=${tonearm_key}"
+          capture_response: true
+          on_response:
+            then:
+              - lambda: |-
+                  if (response->status_code != 200) return;
+                  json::parse_json(body, [](JsonObject root) {
+                    id(title_state) = std::string(root["title"] | "(idle)");
+                    id(album_state) = std::string(root["album"] | "");
+                    id(artist_state) = std::string(root["artist"] | "");
+                    id(elapsed_ms) = root["elapsedMs"] | 0;
+                    id(duration_ms) = root["durationMs"] | 0;
+                    id(playing) = root["isPlaying"] | false;
+                    return true;
+                  });
+
+display:
+  - platform: hub75_matrix_display
+    id: matrix
+    driver: FM6126A
+    i2sspeed: HZ_10M
+    clock_phase: false
+    latch_blanking: 1
+    width: 64
+    height: 32
+    R1_pin: 5
+    G1_pin: 23
+    B1_pin: 4
+    R2_pin: 2
+    G2_pin: 22
+    B2_pin: 32
+    A_pin: 25
+    B_pin: 21
+    C_pin: 26
+    D_pin: 19
+    LAT_pin: 18
+    OE_pin: 27
+    CLK_pin: 15
+    update_interval: 50ms
+    lambda: |-
+      // ── 3x5 pixel font, 1px strokes, 49 glyphs (A-Z, 0-9, punct, space) ──
+      static const uint16_t F[] = {
+        0x2BED,0x6BAE,0x3923,0x6B6E,0x79A7,0x79A4,0x396B,0x5BED,
+        0x7497,0x126A,0x5BAD,0x4927,0x5FED,0x5FFD,0x2B6A,0x6BA4,
+        0x2B51,0x6BAD,0x388E,0x7492,0x5B6F,0x5B6A,0x5BFD,0x5AAD,
+        0x5A92,0x72A7,0x7B6F,0x2C97,0x73E7,0x72CF,0x5BC9,0x79CF,
+        0x79EF,0x7252,0x7BEF,0x7BCF,0x0410,0x01C0,0x0002,0x0014,
+        0x2400,0x68AB,0x2482,0x6280,0x12A4,0x1491,0x4494,0x05D0,0x0000
+      };
+      auto draw = [&](int x, int y, const std::string &text, Color col) {
+        std::string t = text;
+        if (t.length() > 15) t = t.substr(0, 14) + ".";
+        int width = t.length() * 4;
+        x = (64 - width) / 2;
+        for (char ch : t) {
+          int n = -1;
+          if (ch >= 'A' && ch <= 'Z') n = ch - 'A';
+          else if (ch >= 'a' && ch <= 'z') n = ch - 'a';
+          else if (ch >= '0' && ch <= '9') n = 26 + ch - '0';
+          else if (ch == ':') n = 36;
+          else if (ch == '-') n = 37;
+          else if (ch == '.') n = 38;
+          else if (ch == ',') n = 39;
+          else if (ch == '\'') n = 40;
+          else if (ch == '&') n = 41;
+          else if (ch == '!') n = 42;
+          else if (ch == '?') n = 43;
+          else if (ch == '/') n = 44;
+          else if (ch == '(') n = 45;
+          else if (ch == ')') n = 46;
+          else if (ch == '+') n = 47;
+          else if (ch == ' ') n = 48;
+          if (n >= 0) {
+            for (int r = 0; r < 5; r++) for (int c = 0; c < 3; c++)
+              if (F[n] & (0x4000 >> (r * 3 + c))) {
+                it.draw_pixel_at(x+c+1, y+r+1, Color::BLACK);   // drop shadow
+                it.draw_pixel_at(x+c, y+r, col);
+              }
+          }
+          x += 4;
+        }
+      };
+      it.fill(Color::BLACK);
+      // full-panel backdrop: blurred + dimmed art (RGB565 from the server)
+      if (bd_have) {
+        for (int py = 0; py < 32; py++)
+          for (int px = 0; px < 64; px++) {
+            int i = (py * 64 + px) * 2;
+            int v = (bd_buf[i] << 8) | bd_buf[i + 1];
+            it.draw_pixel_at(px, py, Color(((v >> 11) & 0x1f) << 3,
+                                           ((v >> 5) & 0x3f) << 2,
+                                           (v & 0x1f) << 3));
+          }
+      }
+      // text floats on the dimmed backdrop, full width
+      draw(0, 8, id(title_state), Color(245, 245, 245));
+      draw(0, 17, id(artist_state), Color(200, 200, 200));
+      float frac = id(duration_ms) > 0 ? (float)id(elapsed_ms) / id(duration_ms) : 0;
+      it.rectangle(4, 27, 56, 3, Color(80,80,80));
+      if (frac > 0) it.filled_rectangle(4, 27, (int)(frac * 56), 3, Color::WHITE);
+      if (id(playing)) it.filled_rectangle(30, 31, 4, 1, Color::WHITE);
+
+# ── the touch pad: the whole remote ────────────────────────────────────
+esp32_touch:
+  setup_mode: false
+
+binary_sensor:
+  - platform: esp32_touch
+    name: "Top pad"
+    id: pad
+    pin: GPIO33
+    threshold: 1200
+    filters:
+      - delayed_on: 10ms
+    on_multi_click:
+      # — 1 tap: play/pause ——————————————————————————————
+      - timing:
+          - ON for at most 0.35s
+          - OFF for at least 0.45s        # window closes: it was ONE tap
+        then:
+          - http_request.post:
+              url: "${tonearm_base}/api/playback/toggle?api_key=${tonearm_key}"
+      # — 2 taps: next ———————————————————————————————————
+      - timing:
+          - ON for at most 0.35s
+          - OFF for 0.1s to 0.4s
+          - ON for at most 0.35s
+          - OFF for at least 0.45s
+        then:
+          - http_request.post:
+              url: "${tonearm_base}/api/playback/next?api_key=${tonearm_key}"
+      # — 3 taps: back (restart if >10s, else previous) ——
+      - timing:
+          - ON for at most 0.35s
+          - OFF for 0.1s to 0.4s
+          - ON for at most 0.35s
+          - OFF for 0.1s to 0.4s
+          - ON for at most 0.35s
+          - OFF for at least 0.45s
+        then:
+          - http_request.post:
+              url: "${tonearm_base}/api/playback/back?threshold_ms=10000&api_key=${tonearm_key}"
+      # — hold ~1s (and release): FAVORITES, in order ————
+      - timing:
+          - ON for 0.8s to 2.5s
+          - OFF for at least 0.4s
+        then:
+          - http_request.post:
+              url: "${tonearm_base}/api/playback/shuffle/off?api_key=${tonearm_key}"
+          - http_request.post:
+              url: "${tonearm_base}/api/playback/play-collection?kind=playlist&id=${playlist_1_id}&api_key=${tonearm_key}"
+      # — hold, release, hold again: HEAVY ROTATION, shuffled ————
+      - timing:
+          - ON for 0.8s to 2.5s
+          - OFF for 0.1s to 0.4s
+          - ON for 0.8s to 2.5s
+          - OFF for at least 0.4s
+        then:
+          - http_request.post:
+              url: "${tonearm_base}/api/playback/shuffle/on?api_key=${tonearm_key}"
+          - http_request.post:
+              url: "${tonearm_base}/api/playback/play-collection?kind=playlist&id=${playlist_2_id}&api_key=${tonearm_key}"
