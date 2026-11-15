@@ -42,10 +42,9 @@ esp32:
   board: esp32dev
   framework:
     type: arduino
-  # Absolute path: the Arduino framework branch passes this value straight
-  # to PlatformIO, which resolves it relative to the build dir — our e2b
-  # pipeline always clones the repo to /home/user/tonearm.
-  partitions: /home/user/tonearm/firmware/tidbyt-nowplaying/dual_ota.csv
+  # Gen 2 is 8MB flash. This leaves room for the display + A2DP + onboard
+  # I2S fallback image (current 2MB-slot image limit is too tight).
+  partitions: /home/user/tonearm/firmware/tidbyt-nowplaying/dual_ota_8mb.csv
 
 # Gen 2 speaker is on the second I2S peripheral. This is the proven
 # community configuration; it coexists with the HUB75 display.
