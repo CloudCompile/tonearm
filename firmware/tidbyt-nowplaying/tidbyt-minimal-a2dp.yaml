@@ -34,16 +34,18 @@ esphome:
       - "-DFORCE_COLOR_DEPTH=2"
       - "-DBOARD_HAS_PSRAM"
     # Gen 2 WROVER-class module: PSRAM QSPI. Physical flash chip is a
-    # GigaDevice GD25Q16 (JEDEC id 0x1840c8) = 16MB — verified via the
+    # GigaDevice GD25Q128 (JEDEC id 0x1840c8) = 16MB — verified via the
     # serial bridge. The image header must say 16MB or the bootloader
     # rejects partition tables beyond the (default 4MB) header size.
     board_build.arduino.memory_type: qio_qspi
-    board_upload.flash_size: "16MB"
   libraries:
     - "ESP32-A2DP=https://github.com/pschatzmann/ESP32-A2DP"
 
 esp32:
   board: esp32dev
+  # GD25Q128 = 16MB. Written into the image header so the bootloader
+  # accepts our partition table (default esp32dev header says 4MB).
+  flash_size: 16MB
   framework:
     type: arduino
   # Gen 2 is 8MB flash. This leaves room for the display + A2DP + onboard
