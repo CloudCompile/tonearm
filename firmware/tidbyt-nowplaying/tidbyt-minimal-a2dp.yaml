@@ -12,7 +12,7 @@ esphome:
   friendly_name: Tidbyt Minimal Bose
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.4"
+    version: "0.4.6"
   on_boot:
     priority: -100
     then:
@@ -33,8 +33,12 @@ esphome:
     build_flags:
       - "-DFORCE_COLOR_DEPTH=2"
       - "-DBOARD_HAS_PSRAM"
-    # Gen 2 WROVER-class module: PSRAM QSPI; official board has 8MB flash.
+    # Gen 2 WROVER-class module: PSRAM QSPI. Physical flash chip is a
+    # GigaDevice GD25Q16 (JEDEC id 0x1840c8) = 16MB — verified via the
+    # serial bridge. The image header must say 16MB or the bootloader
+    # rejects partition tables beyond the (default 4MB) header size.
     board_build.arduino.memory_type: qio_qspi
+    board_upload.flash_size: "16MB"
   libraries:
     - "ESP32-A2DP=https://github.com/pschatzmann/ESP32-A2DP"
 
@@ -107,7 +111,7 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.4"
+            version: "0.4.6"
             ip: !lambda 'return std::string(WiFi.localIP().toString().c_str());'
             wifi_rssi: !lambda 'return std::to_string(WiFi.RSSI());'
             free_heap: !lambda 'return std::to_string(ESP.getFreeHeap());'
