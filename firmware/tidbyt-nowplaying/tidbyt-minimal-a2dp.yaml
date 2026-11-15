@@ -82,6 +82,8 @@ external_components:
     components: [tidbyt_a2dp]
 
 logger:
+  # Small task log buffer: internal DRAM is the scarce resource here.
+  task_log_buffer_size: 256
 ota:
   - platform: http_request
 http_request:
@@ -96,10 +98,6 @@ http_request:
 # Not needed (no api/web_server use); frees internal DRAM for BT/audio.
 mdns:
   disabled: true
-
-logger:
-  # Small task log buffer: internal DRAM is the scarce resource here.
-  task_log_buffer_size: 256
 
 update:
   - platform: http_request
