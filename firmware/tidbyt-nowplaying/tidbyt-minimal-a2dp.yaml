@@ -239,21 +239,13 @@ display:
     LAT_pin: 18
     OE_pin: 27
     CLK_pin: 15
-    update_interval: 50ms
+    update_interval: 200ms
     lambda: |-
-      // ── change detection: only re-render when something changed ──
-      // The wrapper keeps scanning the last composed frame via DMA, so a
-      // no-op frame costs nothing and the panel never flickers. A full
-      // render happens only on track/text/progress/backdrop changes.
-      static std::string prev_sig;
-      std::string sig = id(title_state) + "|" + id(artist_state) + "|" +
-                        std::to_string(id(elapsed_ms)) + "|" +
-                        (id(playing) ? "1" : "0") + "|" + (bd_have ? "1" : "0");
-      if (bd_have)
-        sig.append(reinterpret_cast<const char *>(bd_buf), 64 * 32 * 2);
-      if (sig == prev_sig)
-        return;
-      prev_sig = sig;
+      // NOTE: the wrapper clears its buffer before every call, so there is
+      // no cheap "skip if unchanged" path — a skipped frame renders black.
+      // Instead we let each render finish before the next: update_interval
+      // is set well above the ~110ms render time, and every frame is a
+      // complete, stable image (only the progress bar moves, every ~5s).
       // ── 3x5 pixel font, 1px strokes, 49 glyphs (A-Z, 0-9, punct, space) ──
       static const uint16_t F[] = {
         0x2BED,0x6BAE,0x3923,0x6B6E,0x79A7,0x79A4,0x396B,0x5BED,
