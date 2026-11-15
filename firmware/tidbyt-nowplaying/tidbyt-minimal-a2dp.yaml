@@ -148,9 +148,9 @@ script:
           json:
             device: "tidbyt-a2dp"
             version: "0.4.12"
-            # IDF port (v0.4.12): network::get_ip_address / heap_caps /
-            # esp_flash replace WiFi.* and ESP.get* (Arduino-only).
-            ip: !lambda 'return network::get_ip_address().str();'
+            # IDF port (v0.4.12): ip comes from the wifi_info text_sensor
+            # (network::get_ip_address doesn't exist in 2026.x); heap_caps /
+            ip: !lambda 'return id(ip_state);'
             wifi_rssi: !lambda 'return std::to_string((int) id(wifi_rssi).state);'
             free_heap: !lambda 'return std::to_string(heap_caps_get_free_size(MALLOC_CAP_DEFAULT));'
             internal_heap: !lambda 'return std::to_string(ta_internal_heap());'
@@ -167,20 +167,27 @@ script:
       - delay: 60s
       - script.execute: report_status
 
-text_sensor:
-  - platform: template
-    id: np_title
-    lambda: 'return {id(title_state)};'
-  - platform: template
-    id: np_artist
-    lambda: 'return {id(artist_state)};'
-
 # v0.4.12 IDF port: replaces WiFi.RSSI() in report_status.
 sensor:
   - platform: wifi_signal
     id: wifi_rssi
     update_interval: 15s
     internal: true
+
+# v0.4.12 IDF port: replaces WiFi.localIP().toString() in report_status.
+text_sensor:
+  - platform: wifi_info
+    ip_address:
+      id: ip_ts
+      on_value:
+        then:
+          - lambda: 'id(ip_state) = x;'
+  - platform: template
+    id: np_title
+    lambda: 'return {id(title_state)};'
+  - platform: template
+    id: np_artist
+    lambda: 'return {id(artist_state)};'
 
 globals:
   - id: audio_fallback_tried
@@ -193,6 +200,9 @@ globals:
   - id: title_state
     type: std::string
     initial_value: '"starting up"'
+  - id: ip_state
+    type: std::string
+    initial_value: '""'
   - id: album_state
     type: std::string
     initial_value: '"tonearm"'
