@@ -43,14 +43,6 @@ esphome:
                 args: ['id(audio_fallback_tried)', 'ta_dma_heap()']
   includes:
     - external_components/art_buf.h
-  platformio_options:
-    build_flags:
-      - "-DBOARD_HAS_PSRAM"
-    # Gen 2 WROVER-class module: PSRAM QSPI. Physical flash chip is a
-    # GigaDevice GD25Q128 (JEDEC id 0x1840c8) = 16MB — verified via the
-    # serial bridge. The image header must say 16MB or the bootloader
-    # rejects partition tables beyond the (default 4MB) header size.
-    board_build.arduino.memory_type: qio_qspi
 
 esp32:
   board: esp32dev
@@ -58,9 +50,19 @@ esp32:
   # accepts our partition table (default esp32dev header says 4MB).
   flash_size: 16MB
   framework:
-    type: arduino
+    # v0.4.12: ESP-IDF — required by media_player.speaker (the replacement
+    # for the removed i2s_audio media player). Arduino-only telemetry calls
+    # (WiFi.RSSI, ESP.*) were ported to IDF equivalents.
+    type: esp-idf
   # GD25Q128 = 16MB physical (verified via serial bridge flash_id).
   partitions: /home/user/tonearm/firmware/tidbyt-nowplaying/dual_ota_8mb.csv
+
+# Gen 2 WROVER-class module: PSRAM QSPI. IDF does not auto-init PSRAM from
+# an Arduino build flag — the psram component does it (also what v0.5's
+# stream buffer and offline art cache will allocate from).
+psram:
+  mode: quad
+  speed: 40MHz
 
 # Gen 2 speaker is on the second I2S peripheral. This is the proven
 # community configuration; it coexists with the HUB75 display.
@@ -69,14 +71,29 @@ i2s_audio:
     i2s_lrclk_pin: GPIO13
     i2s_bclk_pin: GPIO12
 
-media_player:
+# v0.4.12: the old media_player.i2s_audio was removed in the 2026.x core.
+# The replacement is a two-layer stack: `speaker` = the raw I2S sink,
+# `media_player: speaker` = the URL-parsing/decoding pipeline on top of it.
+# Server stream is MP3 @ 44100 Hz stereo (tonearm/audio.py), so the speaker
+# runs at 44100 to avoid a resample pass. num_channels: 1 downmixes stereo
+# to mono for the Gen 2's single onboard speaker. No announcement pipeline
+# (not needed, saves RAM).
+speaker:
   - platform: i2s_audio
-    id: onboard_speaker
-    name: "Tidbyt Onboard Speaker"
-    i2s_audio_id: onboard_i2s
+    id: spk_i2s
     dac_type: external
     i2s_dout_pin: GPIO14
-    mode: mono
+    sample_rate: 44100
+    channel: left
+
+media_player:
+  - platform: speaker
+    id: onboard_speaker
+    name: "Tidbyt Onboard Speaker"
+    speaker_id: spk_i2s
+    media_pipeline:
+      speaker_id: spk_i2s
+      num_channels: 1
 
 logger:
 ota:
@@ -119,9 +136,11 @@ script:
           json:
             device: "tidbyt-a2dp"
             version: "0.4.12"
-            ip: !lambda 'return std::string(WiFi.localIP().toString().c_str());'
-            wifi_rssi: !lambda 'return std::to_string(WiFi.RSSI());'
-            free_heap: !lambda 'return std::to_string(ESP.getFreeHeap());'
+            # IDF port (v0.4.12): network::get_ip_address / heap_caps /
+            # esp_flash replace WiFi.* and ESP.get* (Arduino-only).
+            ip: !lambda 'return network::get_ip_address().str();'
+            wifi_rssi: !lambda 'return std::to_string((int) id(wifi_rssi).state);'
+            free_heap: !lambda 'return std::to_string(heap_caps_get_free_size(MALLOC_CAP_DEFAULT));'
             internal_heap: !lambda 'return std::to_string(ta_internal_heap());'
             internal_largest_block: !lambda 'return std::to_string(ta_internal_largest());'
             dma_heap: !lambda 'return std::to_string(ta_dma_heap());'
@@ -130,9 +149,9 @@ script:
             ota_status: "checking"
             state: "a2dp-test"
             psram_bytes: !lambda |-
-              return std::to_string(ESP.getPsramSize());
+              return std::to_string(heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
             flash_bytes: !lambda |-
-              return std::to_string(ESP.getFlashChipSize());
+              return std::to_string(ta_flash_size());
       - delay: 60s
       - script.execute: report_status
 
@@ -143,6 +162,13 @@ text_sensor:
   - platform: template
     id: np_artist
     lambda: 'return {id(artist_state)};'
+
+# v0.4.12 IDF port: replaces WiFi.RSSI() in report_status.
+sensor:
+  - platform: wifi_signal
+    id: wifi_rssi
+    update_interval: 15s
+    internal: true
 
 globals:
   - id: audio_fallback_tried

@@ -8,6 +8,7 @@ static bool bd_have = false;
 // Internal-DRAM telemetry helpers (v0.4.8: no BT component anymore, but the
 // heap numbers are how we know whether audio/display can coexist).
 #include <esp_heap_caps.h>
+#include <esp_flash.h>
 static inline unsigned ta_internal_heap() {
   return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
 }
@@ -20,4 +21,10 @@ static inline unsigned ta_internal_largest() {
 // (LoadProhibited crash, seen in v0.4.6).
 static inline unsigned ta_dma_heap() {
   return heap_caps_get_free_size(MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT | MALLOC_CAP_DMA);
+}
+// Flash size without Arduino's ESP.getFlashChipSize() (framework-portable).
+static inline unsigned ta_flash_size() {
+  uint32_t sz = 0;
+  esp_flash_get_size(NULL, &sz);
+  return sz;
 }
