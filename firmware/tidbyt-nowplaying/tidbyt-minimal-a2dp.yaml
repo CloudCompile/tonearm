@@ -12,7 +12,7 @@ esphome:
   friendly_name: Tidbyt Minimal Bose
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.8"
+    version: "0.4.9"
   on_boot:
     priority: -100
     then:
@@ -122,7 +122,7 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.8"
+            version: "0.4.9"
             ip: !lambda 'return std::string(WiFi.localIP().toString().c_str());'
             wifi_rssi: !lambda 'return std::to_string(WiFi.RSSI());'
             free_heap: !lambda 'return std::to_string(ESP.getFreeHeap());'
