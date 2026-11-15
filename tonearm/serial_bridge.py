@@ -5,7 +5,8 @@ USB serial port via Web Serial) mirrors every byte the device emits to the
 WebSocket below, and polls an ops queue that agents drive:
 
   POST /api/device/serial/ops   agent queues ops: {"op": "flash", "url": ...}
-                                 {"op": "chip_id"}, {"op": "reset"}   (write key)
+                                 {"op": "chip_id"}, {"op": "flash_id"},
+                                 {"op": "reset"}   (write key)
   GET  /api/device/serial/ops   page pops the queue                  (device key)
   POST /api/device/serial/results   page reports op outcomes + chip info
   GET  /api/device/serial/results   agent reads outcomes
