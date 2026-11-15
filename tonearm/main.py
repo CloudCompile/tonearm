@@ -33,6 +33,14 @@ log = logging.getLogger("tonearm")
 
 @asynccontextmanager
 async def lifespan(app):
+    # v0.4.15: background snapshot refresher — keeps the now-playing cache
+    # fresh for the device's 5s polls even with zero SSE clients (panel
+    # showed "idle" during real playback whenever no stream tab was open).
+    try:
+        from .routes.stream import start_snapshot_refresher
+        start_snapshot_refresher()
+    except Exception as e:
+        log.error("snapshot refresher failed to start: %s", e)
     # audio pipeline starts eagerly, BEFORE the process is multithreaded:
     # spawning subprocesses from the running event loop wedges the loop
     # (fork-vs-GIL deadlock — found with py-spy the hard way)

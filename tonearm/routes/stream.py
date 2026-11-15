@@ -105,6 +105,30 @@ async def _events(request: Request, identity=None):
             keys_mod.sse_cap.leave(identity)
 
 
+def start_snapshot_refresher():
+    """v0.4.15: keep _last fresh even with ZERO stream listeners.
+
+    The device polls /api/playback/now-playing every 5s, but _last was only
+    updated by _events (running SSE clients) — with the overlay closed the
+    cache froze and the panel showed "idle" during real playback. One daemon
+    thread, serialized by the browser layer's own lock, never crashes the
+    app: every failure is swallowed and retried next tick.
+    """
+    import traceback
+
+    def _loop():
+        while True:
+            try:
+                snap = mk.snapshot()
+                if snap:
+                    _remember(snap)
+            except Exception:
+                traceback.print_exc()
+            time.sleep(10)
+
+    threading.Thread(target=_loop, daemon=True, name="snapshot-refresher").start()
+
+
 @router.get("/stream")
 def stream(request: Request):
     # per-key SSE connection cap (#118): the master is unlimited; a scoped
