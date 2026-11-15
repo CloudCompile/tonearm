@@ -86,9 +86,6 @@ ota:
   - platform: http_request
 http_request:
   verify_ssl: false
-  # Artwork backdrop is 4096 bytes; the default max response buffer is 1kB
-  # and silently truncated the body (the "no artwork" bug).
-  max_response_buffer_size: 5kB
 
 # Not needed (no api/web_server use); frees internal DRAM for BT/audio.
 mdns:
