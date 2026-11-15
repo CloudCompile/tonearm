@@ -64,7 +64,7 @@ def _listener_delta(d):
         return _listeners
 
 
-async def _events(request: Request):
+async def _events(request: Request, identity=None):
     _listener_delta(1)
     try:
         mk.install_stream_hook()
@@ -117,6 +117,6 @@ def stream(request: Request):
             content={"error": {"code": "rate_limited",
                                "hint": f"key {identity.describe()} hit its "
                                        f"concurrent-stream cap"}})
-    return StreamingResponse(_events(request), media_type="text/event-stream",
+    return StreamingResponse(_events(request, identity), media_type="text/event-stream",
                              headers={"Cache-Control": "no-store",
                                       "X-Accel-Buffering": "no"})
