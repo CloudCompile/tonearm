@@ -53,10 +53,14 @@ async def push_op(request: Request):
 
 
 @router.get("/api/device/serial/ops")
-async def get_ops(pop: int = 1):
-    out = list(_ops)
+async def get_ops(pop: int = 1, token: str = ""):
+    # Ops may be addressed to a specific page token (the ?v= parameter).
+    # Unaddressed ops go to any page; addressed ops only to that page. Only
+    # the delivered ops are consumed — ops for other pages stay queued.
+    out = [op for op in _ops if not op.get("for") or op.get("for") == token]
     if pop:
-        _ops.clear()
+        for op in out:
+            _ops.remove(op)
     return {"ops": out}
 
 

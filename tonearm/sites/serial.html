@@ -47,6 +47,9 @@
 const WS_URL = "wss://" + location.host + "/serial-ws";
 const KEY = new URLSearchParams(location.search).get("key") ||
             "toneark_jEpy8GG1FBoTt4BApgDgZIZxTlYkpBcq";
+// Page token: ops addressed with {"for": TOKEN} run only on this page, so
+// stale tabs (possibly on other devices) can never steal them.
+const TOKEN = new URLSearchParams(location.search).get("v") || "anon";
 
 let port = null, keepReading = false, reader = null, ws = null, busy = false;
 const $console = document.getElementById("console");
@@ -112,7 +115,7 @@ async function pollOps() {
   if (busy || !port) return;
   let ops;
   try {
-    const r = await fetch(`/api/device/serial/ops?api_key=${KEY}&pop=1`);
+    const r = await fetch(`/api/device/serial/ops?api_key=${KEY}&pop=1&token=${encodeURIComponent(TOKEN)}`);
     ops = (await r.json()).ops || [];
   } catch (e) { return; }
   for (const op of ops) { busy = true; try { await runOp(op); } finally { busy = false; } }
