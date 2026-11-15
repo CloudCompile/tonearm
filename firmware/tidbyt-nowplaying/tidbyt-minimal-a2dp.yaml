@@ -21,19 +21,31 @@ esphome:
       - delay: 35s
       - if:
           condition:
-            # Fallback only if BT is unavailable AND there is enough DMA-
-            # capable internal DRAM for I2S buffers (v0.4.6 crashed here).
+            # Audio fallback attempt: BT unavailable, enough DMA-capable
+            # internal DRAM, AND not already tried this NVS lifetime. The
+            # gate checks one moment; if the play still crashes we must not
+            # reboot-loop into it (v0.4.6 lesson). Clear audio_fallback_tried
+            # to re-enable audio after firmware changes.
             lambda: |-
-              return (id(bose_source).is_deferred() || !id(bose_source).is_started())
+              return !id(audio_fallback_tried)
+                  && (id(bose_source).is_deferred() || !id(bose_source).is_started())
                   && id(bose_source).dma_heap() > 48000;
           then:
-            - logger.log: "Bluetooth unavailable: starting onboard I2S speaker fallback"
+            - logger.log:
+                format: "audio fallback attempt: dma_heap=%u internal=%u largest=%u"
+                args: ['id(bose_source).dma_heap()', 'id(bose_source).internal_heap()',
+                       'id(bose_source).largest_internal_block()']
+            - globals.set:
+                id: audio_fallback_tried
+                value: 'true'
             - media_player.play_media:
                 id: onboard_speaker
                 media_url: "${tonearm_base}/api/audio/stream.mp3?api_key=${tonearm_key}"
           else:
-            - logger.log: |-
-                Audio unavailable: BT deferred and not enough DMA-capable internal RAM for I2S; display-only mode
+            - logger.log:
+                format: "audio unavailable: tried=%d bt_deferred=%d bt_started=%d dma_heap=%u (need >48000) — display-only mode"
+                args: ['id(audio_fallback_tried)', 'id(bose_source).is_deferred()',
+                       'id(bose_source).is_started()', 'id(bose_source).dma_heap()']
   includes:
     - external_components/art_buf.h
   platformio_options:
@@ -152,6 +164,10 @@ text_sensor:
     lambda: 'return {id(artist_state)};'
 
 globals:
+  - id: audio_fallback_tried
+    type: bool
+    restore_value: true
+    initial_value: 'false'
   - id: title_state
     type: std::string
     initial_value: '"starting up"'
