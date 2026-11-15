@@ -12,7 +12,7 @@ esphome:
   friendly_name: Tidbyt Minimal Bose
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.12"
+    version: "0.4.13"
   on_boot:
     priority: -100
     then:
@@ -43,6 +43,7 @@ esphome:
                 args: ['id(audio_fallback_tried)', 'ta_dma_heap()']
   includes:
     - external_components/art_buf.h
+    - external_components/log_ship.h
 
 esp32:
   board: esp32dev
@@ -147,7 +148,7 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.12"
+            version: "0.4.13"
             # IDF port (v0.4.12): ip comes from the wifi_info text_sensor
             # (network::get_ip_address doesn't exist in 2026.x); heap_caps /
             ip: !lambda 'return id(ip_state);'
@@ -190,6 +191,10 @@ text_sensor:
     lambda: 'return {id(artist_state)};'
 
 globals:
+  - id: ota_requested
+    type: bool
+    restore_value: false
+    initial_value: 'false'
   - id: audio_fallback_tried
     type: bool
     # Per-boot, NOT persisted: the NVS-lifetime version permanently blocked
@@ -220,6 +225,50 @@ globals:
     initial_value: 'false'
 
 interval:
+  # v0.4.13: ship log lines over WiFi — no serial page, ever. First tick
+  # registers the logger sink (loop context = logger ready), later ticks
+  # POST whatever accumulated since the last successful batch.
+  - interval: 5s
+    then:
+      - lambda: 'ta_log_register();'
+      - if:
+          condition:
+            lambda: 'return ta_log_have();'
+          then:
+            - http_request.post:
+                url: "${tonearm_base}/api/device/tidbyt/logs?api_key=${tonearm_key}"
+                request_headers:
+                  Content-Type: text/plain
+                body: !lambda |-
+                  return ta_log_take();
+  # v0.4.13: OTA command poll. The server answers cmd=update while a trigger
+  # is armed; clear our flag BEFORE performing so a failed flash can never
+  # loop — re-triggering is a deliberate act on the server.
+  - interval: 10s
+    then:
+      - http_request.get:
+          url: "${tonearm_base}/api/device/tidbyt/cmd?device=tidbyt-a2dp&version=0.4.13&api_key=${tonearm_key}"
+          capture_response: true
+          max_response_buffer_size: 1kB
+          on_response:
+            then:
+              - lambda: |-
+                  if (response->status_code != 200) return;
+                  json::parse_json(body, [](JsonObject root) {
+                    if (std::string(root["cmd"] | "") == "update")
+                      id(ota_requested) = true;
+                    return true;
+                  });
+      - if:
+          condition:
+            lambda: 'return id(ota_requested);'
+          then:
+            - globals.set:
+                id: ota_requested
+                value: 'false'
+            - logger.log: "OTA trigger from server — checking manifest"
+            - update.perform:
+                id: remote_firmware
   - interval: 10s
     then:
       - http_request.get:
