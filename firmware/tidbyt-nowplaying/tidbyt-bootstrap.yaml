@@ -7,7 +7,7 @@
 
 substitutions:
   update_manifest: "http://20.221.210.24/tidbyt-updates/bootstrap/manifest.json"
-  device_key: "toneark_jEpy8GG1FBoTt4BApgDgZIZxTlYkpBcq"
+  device_key: "toneark_zmrFj8aKqstK5zlxwJ3wx5VgIk9E4NcV"
 
 esphome:
   name: tidbyt-bootstrap
