@@ -12,7 +12,7 @@ esphome:
   friendly_name: Tidbyt Minimal Bose
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.15"
+    version: "0.4.16"
   on_boot:
     priority: -100
     then:
@@ -78,19 +78,18 @@ i2s_audio:
 # (media_player.speaker refuses to share one speaker between its two
 # pipelines), and `media_player: speaker` = the URL-parsing/decoding
 # pipeline. Server stream is MP3 @ 44100 Hz stereo (tonearm/audio.py), so
-# the speaker runs at 44100 to avoid a resample pass. The pipeline passes
-# stereo through (num_channels: 2) and the speaker outputs both I2S slots.
+# the speaker runs at 44100 to avoid a resample pass. The media pipeline
+# downmixes to mono for the Gen 2's single onboard speaker.
 # buffer_duration kept small: internal DRAM is this chip's scarcest resource.
 speaker:
   - platform: i2s_audio
     id: spk_i2s
+    i2s_audio_id: onboard_i2s
     dac_type: external
     i2s_dout_pin: GPIO14
     sample_rate: 44100
-    # stereo + pipeline num_channels: 2 = signal on BOTH I2S slots, the
-    # closest equivalent to the old media_player mode: mono that worked
-    # (channel: left was silent on the device — v0.4.13 lesson).
-    channel: stereo
+    # Match the old proven media_player mode: mono.
+    channel: mono
   - platform: mixer
     id: spk_mixer
     output_speaker: spk_i2s
@@ -106,10 +105,10 @@ media_player:
     name: "Tidbyt Onboard Speaker"
     announcement_pipeline:
       speaker: spk_ann
-      num_channels: 2
+      num_channels: 1
     media_pipeline:
       speaker: spk_media
-      num_channels: 2
+      num_channels: 1
 
 logger:
   # v0.4.14: feeds the WiFi log shipper. Registering an on_message trigger
@@ -160,7 +159,7 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.15"
+            version: "0.4.16"
             # IDF port (v0.4.12): ip comes from the wifi_info text_sensor
             # (network::get_ip_address doesn't exist in 2026.x); heap_caps /
             ip: !lambda 'return id(ip_state);'
@@ -258,7 +257,7 @@ interval:
   - interval: 10s
     then:
       - http_request.get:
-          url: "${tonearm_base}/api/device/tidbyt/cmd?device=tidbyt-a2dp&version=0.4.15&api_key=${tonearm_key}"
+          url: "${tonearm_base}/api/device/tidbyt/cmd?device=tidbyt-a2dp&version=0.4.16&api_key=${tonearm_key}"
           capture_response: true
           max_response_buffer_size: 1kB
           on_response:
