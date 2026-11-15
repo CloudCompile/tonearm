@@ -12,7 +12,7 @@ esphome:
   friendly_name: Tidbyt Minimal Bose
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.17"
+    version: "0.4.18"
   on_boot:
     priority: -100
     then:
@@ -122,7 +122,7 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.17"
+            version: "0.4.18"
             ip: !lambda 'return std::string(WiFi.localIP().toString().c_str());'
             wifi_rssi: !lambda 'return std::to_string(WiFi.RSSI());'
             free_heap: !lambda 'return std::to_string(ESP.getFreeHeap());'
@@ -151,7 +151,7 @@ text_sensor:
 globals:
   - id: audio_fallback_tried
     type: bool
-    restore_value: true
+    restore_value: false
     initial_value: 'false'
   - id: title_state
     type: std::string
@@ -239,7 +239,9 @@ display:
     LAT_pin: 18
     OE_pin: 27
     CLK_pin: 15
-    update_interval: 50ms
+    # The wrapper derives its requested scan refresh from this interval.
+    # 50ms visibly flickers at roughly 20Hz; request ~60Hz.
+    update_interval: 16ms
     lambda: |-
       // NOTE: the wrapper clears its buffer before every call, so there is
       // no cheap "skip if unchanged" path — a skipped frame renders black.
