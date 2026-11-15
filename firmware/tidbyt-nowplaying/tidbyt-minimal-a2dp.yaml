@@ -12,7 +12,7 @@ esphome:
   friendly_name: Tidbyt Minimal Bose
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.16"
+    version: "0.4.17"
   on_boot:
     priority: -100
     then:
@@ -43,7 +43,15 @@ esphome:
                 args: ['id(audio_fallback_tried)', 'ta_dma_heap()']
   includes:
     - external_components/art_buf.h
-    - external_components/log_ship.h
+  platformio_options:
+    build_flags:
+      - "-DFORCE_COLOR_DEPTH=2"
+      - "-DBOARD_HAS_PSRAM"
+    # Gen 2 WROVER-class module: PSRAM QSPI. Physical flash chip is a
+    # GigaDevice GD25Q128 (JEDEC id 0x1840c8) = 16MB — verified via the
+    # serial bridge. The image header must say 16MB or the bootloader
+    # rejects partition tables beyond the (default 4MB) header size.
+    board_build.arduino.memory_type: qio_qspi
 
 esp32:
   board: esp32dev
@@ -51,19 +59,9 @@ esp32:
   # accepts our partition table (default esp32dev header says 4MB).
   flash_size: 16MB
   framework:
-    # v0.4.12: ESP-IDF — required by media_player.speaker (the replacement
-    # for the removed i2s_audio media player). Arduino-only telemetry calls
-    # (WiFi.RSSI, ESP.*) were ported to IDF equivalents.
-    type: esp-idf
+    type: arduino
   # GD25Q128 = 16MB physical (verified via serial bridge flash_id).
   partitions: /home/user/tonearm/firmware/tidbyt-nowplaying/dual_ota_8mb.csv
-
-# Gen 2 WROVER-class module: PSRAM QSPI. IDF does not auto-init PSRAM from
-# an Arduino build flag — the psram component does it (also what v0.5's
-# stream buffer and offline art cache will allocate from).
-psram:
-  mode: quad
-  speed: 40MHz
 
 # Gen 2 speaker is on the second I2S peripheral. This is the proven
 # community configuration; it coexists with the HUB75 display.
@@ -72,54 +70,19 @@ i2s_audio:
     i2s_lrclk_pin: GPIO13
     i2s_bclk_pin: GPIO12
 
-# v0.4.12: the old media_player.i2s_audio was removed in the 2026.x core.
-# The replacement is a three-layer stack: `speaker: i2s_audio` = the raw I2S
-# sink, `mixer` = two independent source speakers over that one output
-# (media_player.speaker refuses to share one speaker between its two
-# pipelines), and `media_player: speaker` = the URL-parsing/decoding
-# pipeline. Server stream is MP3 @ 44100 Hz stereo (tonearm/audio.py), so
-# the speaker runs at 44100 to avoid a resample pass. The media pipeline
-# downmixes to mono for the Gen 2's single onboard speaker.
-# buffer_duration kept small: internal DRAM is this chip's scarcest resource.
-speaker:
+media_player:
   - platform: i2s_audio
-    id: spk_i2s
+    id: onboard_speaker
+    name: "Tidbyt Onboard Speaker"
     i2s_audio_id: onboard_i2s
     dac_type: external
     i2s_dout_pin: GPIO14
-    sample_rate: 44100
-    # Match the old proven media_player mode: mono.
-    channel: mono
-  - platform: mixer
-    id: spk_mixer
-    output_speaker: spk_i2s
-    source_speakers:
-      - id: spk_ann
-        buffer_duration: 100ms
-      - id: spk_media
-        buffer_duration: 100ms
+    mode: mono
 
-media_player:
-  - platform: speaker
-    id: onboard_speaker
-    name: "Tidbyt Onboard Speaker"
-    announcement_pipeline:
-      speaker: spk_ann
-      num_channels: 1
-    media_pipeline:
-      speaker: spk_media
-      num_channels: 1
+external_components:
+  - source: github://TillFleisch/ESPHome-HUB75-MatrixDisplayWrapper@main
 
 logger:
-  # v0.4.14: feeds the WiFi log shipper. Registering an on_message trigger
-  # is what makes ESPHome emit USE_LOG_LISTENERS (and real listener slots);
-  # without it add_log_callback is a compiled-out no-op stub.
-  on_message:
-    # INFO: DEBUG is dominated by http_request header spam; INFO keeps
-    # component setup lines (hub75 init, speaker pipeline) which is the point
-    level: INFO
-    then:
-      - lambda: 'ta_log_append(level, tag, message);'
 ota:
   - platform: http_request
 http_request:
@@ -159,12 +122,10 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.16"
-            # IDF port (v0.4.12): ip comes from the wifi_info text_sensor
-            # (network::get_ip_address doesn't exist in 2026.x); heap_caps /
-            ip: !lambda 'return id(ip_state);'
-            wifi_rssi: !lambda 'return std::to_string((int) id(wifi_rssi).state);'
-            free_heap: !lambda 'return std::to_string(heap_caps_get_free_size(MALLOC_CAP_DEFAULT));'
+            version: "0.4.17"
+            ip: !lambda 'return std::string(WiFi.localIP().toString().c_str());'
+            wifi_rssi: !lambda 'return std::to_string(WiFi.RSSI());'
+            free_heap: !lambda 'return std::to_string(ESP.getFreeHeap());'
             internal_heap: !lambda 'return std::to_string(ta_internal_heap());'
             internal_largest_block: !lambda 'return std::to_string(ta_internal_largest());'
             dma_heap: !lambda 'return std::to_string(ta_dma_heap());'
@@ -173,27 +134,13 @@ script:
             ota_status: "checking"
             state: "a2dp-test"
             psram_bytes: !lambda |-
-              return std::to_string(heap_caps_get_total_size(MALLOC_CAP_SPIRAM));
+              return std::to_string(ESP.getPsramSize());
             flash_bytes: !lambda |-
-              return std::to_string(ta_flash_size());
+              return std::to_string(ESP.getFlashChipSize());
       - delay: 60s
       - script.execute: report_status
 
-# v0.4.12 IDF port: replaces WiFi.RSSI() in report_status.
-sensor:
-  - platform: wifi_signal
-    id: wifi_rssi
-    update_interval: 15s
-    internal: true
-
-# v0.4.12 IDF port: replaces WiFi.localIP().toString() in report_status.
 text_sensor:
-  - platform: wifi_info
-    ip_address:
-      id: ip_ts
-      on_value:
-        then:
-          - lambda: 'id(ip_state) = x;'
   - platform: template
     id: np_title
     lambda: 'return {id(title_state)};'
@@ -202,23 +149,13 @@ text_sensor:
     lambda: 'return {id(artist_state)};'
 
 globals:
-  - id: ota_requested
-    type: bool
-    restore_value: false
-    initial_value: 'false'
   - id: audio_fallback_tried
     type: bool
-    # Per-boot, NOT persisted: the NVS-lifetime version permanently blocked
-    # audio after one successful 0.4.8 start. Crash protection now comes from
-    # the dma_heap gate + safe_mode (10 failed boots -> bounded stop).
-    restore_value: false
+    restore_value: true
     initial_value: 'false'
   - id: title_state
     type: std::string
     initial_value: '"starting up"'
-  - id: ip_state
-    type: std::string
-    initial_value: '""'
   - id: album_state
     type: std::string
     initial_value: '"tonearm"'
@@ -236,49 +173,6 @@ globals:
     initial_value: 'false'
 
 interval:
-  # v0.4.13: ship log lines over WiFi — no serial page, ever. First tick
-  # registers the logger sink (loop context = logger ready), later ticks
-  # POST whatever accumulated since the last successful batch.
-  - interval: 3s
-    then:
-      - if:
-          condition:
-            lambda: 'return ta_log_have();'
-          then:
-            - http_request.post:
-                url: "${tonearm_base}/api/device/tidbyt/logs?api_key=${tonearm_key}"
-                request_headers:
-                  Content-Type: text/plain
-                body: !lambda |-
-                  return ta_log_take();
-  # v0.4.13: OTA command poll. The server answers cmd=update while a trigger
-  # is armed; clear our flag BEFORE performing so a failed flash can never
-  # loop — re-triggering is a deliberate act on the server.
-  - interval: 10s
-    then:
-      - http_request.get:
-          url: "${tonearm_base}/api/device/tidbyt/cmd?device=tidbyt-a2dp&version=0.4.16&api_key=${tonearm_key}"
-          capture_response: true
-          max_response_buffer_size: 1kB
-          on_response:
-            then:
-              - lambda: |-
-                  if (response->status_code != 200) return;
-                  json::parse_json(body, [](JsonObject root) {
-                    if (std::string(root["cmd"] | "") == "update")
-                      id(ota_requested) = true;
-                    return true;
-                  });
-      - if:
-          condition:
-            lambda: 'return id(ota_requested);'
-          then:
-            - globals.set:
-                id: ota_requested
-                value: 'false'
-            - logger.log: "OTA trigger from server — checking manifest"
-            - update.perform:
-                id: remote_firmware
   - interval: 10s
     then:
       - http_request.get:
@@ -324,34 +218,27 @@ interval:
                   });
 
 display:
-  # Native ESPHome hub75 driver (2025.12+; based on stuartparmenter's
-  # hub75-esp32, the tech behind the real Tidbyt firmware). Replaces the
-  # third-party hub75_matrix_display wrapper whose 8MHz clock cap and
-  # update-interval-coupled refresh caused the visible rolling/flicker.
-  - platform: hub75
+  - platform: hub75_matrix_display
     id: matrix
-    panel_width: 64
-    panel_height: 32
-    shift_driver: FM6126A
-    clock_speed: 10MHZ
+    driver: FM6126A
+    i2sspeed: HZ_10M
     clock_phase: false
     latch_blanking: 1
-    bit_depth: 6
-    brightness: 160
-    double_buffer: true
-    r1_pin: GPIO5
-    g1_pin: GPIO23
-    b1_pin: GPIO4
-    r2_pin: GPIO2
-    g2_pin: GPIO22
-    b2_pin: GPIO32
-    a_pin: GPIO25
-    b_pin: GPIO21
-    c_pin: GPIO26
-    d_pin: GPIO19
-    lat_pin: GPIO18
-    oe_pin: GPIO27
-    clk_pin: GPIO15
+    width: 64
+    height: 32
+    R1_pin: 5
+    G1_pin: 23
+    B1_pin: 4
+    R2_pin: 2
+    G2_pin: 22
+    B2_pin: 32
+    A_pin: 25
+    B_pin: 21
+    C_pin: 26
+    D_pin: 19
+    LAT_pin: 18
+    OE_pin: 27
+    CLK_pin: 15
     update_interval: 50ms
     lambda: |-
       // NOTE: the wrapper clears its buffer before every call, so there is
