@@ -180,6 +180,8 @@ interval:
       - http_request.get:
           url: "${tonearm_base}/api/playback/artwork-raw?mode=backdrop&api_key=${tonearm_key}"
           capture_response: true
+          # Backdrop is 4096 bytes; default is 1kB (truncation bug).
+          max_response_buffer_size: 5kB
           on_response:
             then:
               - lambda: |-
