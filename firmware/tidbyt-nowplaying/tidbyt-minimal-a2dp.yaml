@@ -12,7 +12,7 @@ esphome:
   friendly_name: Tidbyt Minimal Bose
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.7"
+    version: "0.4.8"
   on_boot:
     priority: -100
     then:
@@ -21,20 +21,16 @@ esphome:
       - delay: 35s
       - if:
           condition:
-            # Audio fallback attempt: BT unavailable, enough DMA-capable
-            # internal DRAM, AND not already tried this NVS lifetime. The
-            # gate checks one moment; if the play still crashes we must not
-            # reboot-loop into it (v0.4.6 lesson). Clear audio_fallback_tried
-            # to re-enable audio after firmware changes.
+            # Audio fallback: enough DMA-capable internal DRAM, AND not
+            # already tried this NVS lifetime. The gate checks one moment;
+            # if the play still crashes we must not reboot-loop into it
+            # (v0.4.6 lesson). Clear audio_fallback_tried to retry audio.
             lambda: |-
-              return !id(audio_fallback_tried)
-                  && (id(bose_source).is_deferred() || !id(bose_source).is_started())
-                  && id(bose_source).dma_heap() > 48000;
+              return !id(audio_fallback_tried) && ta_dma_heap() > 48000;
           then:
             - logger.log:
                 format: "audio fallback attempt: dma_heap=%u internal=%u largest=%u"
-                args: ['id(bose_source).dma_heap()', 'id(bose_source).internal_heap()',
-                       'id(bose_source).largest_internal_block()']
+                args: ['ta_dma_heap()', 'ta_internal_heap()', 'ta_internal_largest()']
             - globals.set:
                 id: audio_fallback_tried
                 value: 'true'
@@ -43,9 +39,8 @@ esphome:
                 media_url: "${tonearm_base}/api/audio/stream.mp3?api_key=${tonearm_key}"
           else:
             - logger.log:
-                format: "audio unavailable: tried=%d bt_deferred=%d bt_started=%d dma_heap=%u (need >48000) — display-only mode"
-                args: ['id(audio_fallback_tried)', 'id(bose_source).is_deferred()',
-                       'id(bose_source).is_started()', 'id(bose_source).dma_heap()']
+                format: "audio unavailable: tried=%d dma_heap=%u (need >48000) — display-only mode"
+                args: ['id(audio_fallback_tried)', 'ta_dma_heap()']
   includes:
     - external_components/art_buf.h
   platformio_options:
@@ -57,8 +52,6 @@ esphome:
     # serial bridge. The image header must say 16MB or the bootloader
     # rejects partition tables beyond the (default 4MB) header size.
     board_build.arduino.memory_type: qio_qspi
-  libraries:
-    - "ESP32-A2DP=https://github.com/pschatzmann/ESP32-A2DP"
 
 esp32:
   board: esp32dev
@@ -88,10 +81,6 @@ media_player:
 
 external_components:
   - source: github://TillFleisch/ESPHome-HUB75-MatrixDisplayWrapper@main
-  - source:
-      type: local
-      path: external_components
-    components: [tidbyt_a2dp]
 
 logger:
 ota:
@@ -119,12 +108,10 @@ wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
 
-# Bluetooth source only; no onboard I2S speaker.
-tidbyt_a2dp:
-  id: bose_source
-  device_name: "Bose Mini II SoundLink"
-  url: "${tonearm_base}/api/audio/stream.pcm?api_key=${tonearm_key}"
-
+# v0.4.8: Bluetooth source removed. The A2DP stack could never start on this
+# chip (needs ~180KB internal DRAM; HUB75 + WiFi leave ~31KB) and its linked
+# controller library statically reserved internal RAM the audio path needed.
+# Bose audio moves to a companion chip fed by the same stream URL.
 script:
   - id: report_status
     mode: restart
@@ -135,15 +122,13 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.7"
+            version: "0.4.8"
             ip: !lambda 'return std::string(WiFi.localIP().toString().c_str());'
             wifi_rssi: !lambda 'return std::to_string(WiFi.RSSI());'
             free_heap: !lambda 'return std::to_string(ESP.getFreeHeap());'
-            internal_heap: !lambda 'return std::to_string(id(bose_source).internal_heap());'
-            internal_largest_block: !lambda 'return std::to_string(id(bose_source).largest_internal_block());'
-            dma_heap: !lambda 'return std::to_string(id(bose_source).dma_heap());'
-            bt_deferred: !lambda 'return id(bose_source).is_deferred() ? "true" : "false";'
-            bt_started: !lambda 'return id(bose_source).is_started() ? "true" : "false";'
+            internal_heap: !lambda 'return std::to_string(ta_internal_heap());'
+            internal_largest_block: !lambda 'return std::to_string(ta_internal_largest());'
+            dma_heap: !lambda 'return std::to_string(ta_dma_heap());'
             uptime_s: !lambda 'return std::to_string(millis() / 1000);'
             reset_reason: !lambda 'return std::to_string((int) esp_reset_reason());'
             ota_status: "checking"
@@ -256,6 +241,19 @@ display:
     CLK_pin: 15
     update_interval: 50ms
     lambda: |-
+      // ── change detection: only re-render when something changed ──
+      // The wrapper keeps scanning the last composed frame via DMA, so a
+      // no-op frame costs nothing and the panel never flickers. A full
+      // render happens only on track/text/progress/backdrop changes.
+      static std::string prev_sig;
+      std::string sig = id(title_state) + "|" + id(artist_state) + "|" +
+                        std::to_string(id(elapsed_ms)) + "|" +
+                        (id(playing) ? "1" : "0") + "|" + (bd_have ? "1" : "0");
+      if (bd_have)
+        sig.append(reinterpret_cast<const char *>(bd_buf), 64 * 32 * 2);
+      if (sig == prev_sig)
+        return;
+      prev_sig = sig;
       // ── 3x5 pixel font, 1px strokes, 49 glyphs (A-Z, 0-9, punct, space) ──
       static const uint16_t F[] = {
         0x2BED,0x6BAE,0x3923,0x6B6E,0x79A7,0x79A4,0x396B,0x5BED,
@@ -265,8 +263,7 @@ display:
         0x79EF,0x7252,0x7BEF,0x7BCF,0x0410,0x01C0,0x0002,0x0014,
         0x2400,0x68AB,0x2482,0x6280,0x12A4,0x1491,0x4494,0x05D0,0x0000
       };
-      auto draw = [&](int x, int y, const std::string &text, Color col) {
-        std::string t = text;
+      auto draw = [&](int x, int y, const std::string &text, Color col) {        std::string t = text;
         if (t.length() > 15) t = t.substr(0, 14) + ".";
         int width = t.length() * 4;
         x = (64 - width) / 2;
