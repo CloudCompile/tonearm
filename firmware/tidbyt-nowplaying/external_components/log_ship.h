@@ -20,14 +20,14 @@ static std::string ta_log_batch;
 static bool ta_log_in_sink = false;
 static bool ta_log_registered = false;
 
-static void ta_log_append(uint8_t level, const char *tag, const char *msg) {
+static void ta_log_on_log(void *, uint8_t level, const char *tag, const char *msg, size_t len) {
   if (ta_log_in_sink)
     return;  // our own shipping logs do not recurse into the batch
   if (ta_log_batch.size() > 8192)
     return;  // batch full — newest lines win next tick
   static const char LEVEL_CHARS[] = {'N', 'E', 'W', 'I', 'D', 'V', 'V'};
   char lvl = (level < sizeof(LEVEL_CHARS)) ? LEVEL_CHARS[level] : '?';
-  std::string line = esphome::str_sprintf("[%c][%s] %s\n", lvl, tag, msg);
+  std::string line = esphome::str_sprintf("[%c][%s] %.*s", lvl, tag, (int) len, msg);
   while (!line.empty() && (line.back() == '\n' || line.back() == '\r'))
     line.pop_back();
   ta_log_batch += line;
@@ -36,15 +36,12 @@ static void ta_log_append(uint8_t level, const char *tag, const char *msg) {
 
 // Idempotent; called from the ship interval's first tick (loop context, so
 // logger::global_logger is guaranteed set up — on_boot would be too early).
+// 2026.10 API: plain fn pointer + instance void* (no std::function wrapper).
 static void ta_log_register() {
   if (ta_log_registered)
     return;
   ta_log_registered = true;
-  using LogCb = esphome::callback::Callback<void(uint8_t, const char *, const char *)>;
-  esphome::logger::global_logger->add_on_log_callback(
-      std::make_unique<LogCb>([](uint8_t level, const char *tag, const char *msg) {
-        ta_log_append(level, tag, msg);
-      }));
+  esphome::logger::global_logger->add_log_callback(nullptr, ta_log_on_log);
 }
 
 // Copy-and-clear for the POST body. The copy keeps any lines the logger
