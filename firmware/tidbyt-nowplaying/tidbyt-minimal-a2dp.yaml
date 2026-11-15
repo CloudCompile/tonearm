@@ -90,9 +90,11 @@ media_player:
   - platform: speaker
     id: onboard_speaker
     name: "Tidbyt Onboard Speaker"
-    speaker_id: spk_i2s
+    announcement_pipeline:
+      speaker: spk_i2s
+      num_channels: 1
     media_pipeline:
-      speaker_id: spk_i2s
+      speaker: spk_i2s
       num_channels: 1
 
 logger:
