@@ -12,7 +12,7 @@ esphome:
   friendly_name: Tidbyt Minimal Bose
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.9"
+    version: "0.4.10"
   on_boot:
     priority: -100
     then:
@@ -122,7 +122,7 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.9"
+            version: "0.4.10"
             ip: !lambda 'return std::string(WiFi.localIP().toString().c_str());'
             wifi_rssi: !lambda 'return std::to_string(WiFi.RSSI());'
             free_heap: !lambda 'return std::to_string(ESP.getFreeHeap());'
@@ -151,7 +151,10 @@ text_sensor:
 globals:
   - id: audio_fallback_tried
     type: bool
-    restore_value: true
+    # Per-boot, NOT persisted: the NVS-lifetime version permanently blocked
+    # audio after one successful 0.4.8 start. Crash protection now comes from
+    # the dma_heap gate + safe_mode (10 failed boots -> bounded stop).
+    restore_value: false
     initial_value: 'false'
   - id: title_state
     type: std::string
@@ -221,7 +224,7 @@ display:
   - platform: hub75_matrix_display
     id: matrix
     driver: FM6126A
-    i2sspeed: HZ_10M
+    i2sspeed: HZ_20M  # HZ_10M maps to 8MHz in the lib; 20M doubles the scan/refresh rate
     clock_phase: false
     latch_blanking: 1
     width: 64
