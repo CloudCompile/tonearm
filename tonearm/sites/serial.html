@@ -100,8 +100,11 @@ async function readLoop() {
 }
 function stopReading() {
   keepReading = false;
-  try { reader && reader.releaseLock(); } catch (e) {}
-  return new Promise(r => setTimeout(r, 300));
+  return (async () => {
+    try { if (reader) await reader.cancel(); } catch (e) {}
+    try { if (reader) reader.releaseLock(); } catch (e) {}
+    await new Promise(r => setTimeout(r, 300));
+  })();
 }
 
 // ── ops (agent-driven) ──────────────────────────────────────────────
@@ -148,9 +151,15 @@ async function runOp(op) {
         const data = new Uint8Array(await resp.arrayBuffer());
         line("[flash] " + data.length + " bytes @ 0x" +
              (op.offset || 0).toString(16));
+        // esptool-js 0.5.x's writeFlash API takes a binary string; newer
+        // releases take Uint8Array. Convert in chunks so the spread does
+        // not overflow the browser call stack on a ~2MB factory image.
+        let binary = "";
+        for (let p = 0; p < data.length; p += 0x8000)
+          binary += String.fromCharCode(...data.subarray(p, p + 0x8000));
         opmsg("flashing 0%…");
         await loader.writeFlash({
-          fileArray: [{data, address: op.offset || 0}],
+          fileArray: [{data: binary, address: op.offset || 0}],
           flashSize: "keep", flashMode: "keep", flashFreq: "keep",
           eraseAll: false, compress: true,
           reportProgress: (f, cur, total) =>
