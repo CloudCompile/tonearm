@@ -126,7 +126,7 @@ async function runOp(op) {
     for (let i = 0; i < 60 && !window.ESPLoader; i++)
       await new Promise(r => setTimeout(r, 250));
     if (!window.ESPLoader) throw new Error("esptool-js failed to load");
-    if (op.op === "chip_id" || op.op === "flash") {
+    if (op.op === "chip_id" || op.op === "flash_id" || op.op === "flash") {
       await stopReading();                 // release our reader lock
       try { await port.close(); } catch (e) {}   // esptool opens it itself
       const transport = new window.Transport(port);
@@ -143,6 +143,18 @@ async function runOp(op) {
         try { mac = (await loader.chip.readMac(loader)).join(":"); } catch (e) {}
         opmsg("chip: " + chip + " mac " + mac);
         await report({op, chip, mac, ok: true});
+      } else if (op.op === "flash_id") {
+        // Physical flash chip ID: bits 16+ are the JEDEC manufacturer/device,
+        // e.g. 0x1640ef-ish families -> 0x4016 = 4MB, 0x4017 = 8MB.
+        let fid = null;
+        try { fid = await loader.flashId(); } catch (e) {}
+        if (fid == null) { try { fid = await loader.getFlashId(); } catch (e) {} }
+        const hex = fid == null ? "?" : "0x" + fid.toString(16).padStart(6, "0");
+        const mb = fid == null ? "?" : ((fid >> 16) & 0xff) === 0x17 ? "8MB" :
+                   ((fid >> 16) & 0xff) === 0x16 ? "4MB" : "see-hex";
+        opmsg("chip: " + chip + " flash id " + hex + " -> " + mb);
+        line("[esptool] flashId: " + hex + " (" + mb + ")");
+        await report({op, chip, flash_id: hex, flash_size: mb, ok: true});
       } else {
         opmsg("fetching firmware…");
         const resp = await fetch(`/api/device/serial/file?api_key=${KEY}&url=`
