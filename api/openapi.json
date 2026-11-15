@@ -5573,6 +5573,78 @@
     "summary": "Post Result"
    }
   },
+  "/api/device/tidbyt/cmd": {
+   "get": {
+    "description": "Device-initiated poll (keyed like report). Returns cmd=update while\na trigger is armed and unexpired for a version newer than reported.",
+    "operationId": "poll_cmd_api_device_tidbyt_cmd_get",
+    "parameters": [
+     {
+      "in": "query",
+      "name": "device",
+      "required": false,
+      "schema": {
+       "default": "tidbyt-a2dp",
+       "title": "Device",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "version",
+      "required": false,
+      "schema": {
+       "default": "",
+       "title": "Version",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Poll Cmd",
+    "tags": [
+     "device"
+    ]
+   }
+  },
+  "/api/device/tidbyt/logs": {
+   "post": {
+    "description": "v0.4.13: device ships its ESPHome log lines over WiFi (plain text,\none line per line). Appended into the serial bridge's console ring so\nthe existing /serial page and console API show them \u2014 no USB needed.",
+    "operationId": "report_logs_api_device_tidbyt_logs_post",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Report Logs",
+    "tags": [
+     "device"
+    ]
+   }
+  },
   "/api/device/tidbyt/opencode": {
    "post": {
     "description": "Accept only a short, allowlisted session summary; never accept\nprompts, code, tool arguments, or arbitrary event payloads.",
@@ -5670,6 +5742,48 @@
      }
     },
     "summary": "Tidbyt Status",
+    "tags": [
+     "device"
+    ]
+   }
+  },
+  "/api/device/tidbyt/update": {
+   "post": {
+    "description": "Arm the OTA trigger: the device picks it up via /tidbyt/cmd within\none poll interval and runs update.perform itself.",
+    "operationId": "trigger_update_api_device_tidbyt_update_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "additionalProperties": true,
+        "title": "Body",
+        "type": "object"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {}
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Trigger Update",
     "tags": [
      "device"
     ]
