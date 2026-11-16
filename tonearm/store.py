@@ -358,13 +358,13 @@ class Store:
 
     # ---- diff queries (watermark-driven; see module docstring) ----
 
-    def _rows_where(self, where, args, limit, offset):
+    def _rows_where(self, where, args, limit, offset, order_by=None):
         conn = self._require_conn()
         with self._lock:
             rows = conn.execute(
                 f"SELECT library_id, catalog_id, name, artist, album, "
                 f"duration_ms, kind, first_seen, last_seen, last_changed "
-                f"FROM library WHERE {where} ORDER BY last_changed DESC, "
+                f"FROM library WHERE {where} ORDER BY {order_by or 'last_changed DESC'}, "
                 f"library_id LIMIT ? OFFSET ?", (*args, limit, offset)).fetchall()
             total = conn.execute(
                 f"SELECT COUNT(*) FROM library WHERE {where}", args).fetchone()[0]
@@ -377,8 +377,12 @@ class Store:
                 "next_offset": nxt if nxt < total and out else None}
 
     def library_added_since(self, since, limit=100, offset=0):
-        """Rows first seen after `since`. since=0 -> the whole library."""
-        return self._rows_where("first_seen > ?", (since,), limit, offset)
+        """Rows first seen after `since`. since=0 -> the whole library.
+        Ordered by first_seen — this is the ADDED order (last_changed would
+        float old rows that merely changed; found via the PWA's
+        recently-added sort)."""
+        return self._rows_where("first_seen > ?", (since,), limit, offset,
+                                order_by="first_seen DESC")
 
     def library_updated_since(self, since, limit=100, offset=0):
         """Rows that CHANGED after `since` (not counting brand-new ones)."""

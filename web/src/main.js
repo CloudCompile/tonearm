@@ -109,14 +109,53 @@ async function loadLibrary(tab = activeTab) {
   $("tabs").dataset.tab = tab;
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
   $("list-count").textContent = tab === "queue" ? "Drag to reorder · changes apply to your player" : `Your ${tab}`;
-  $("browse-toolbar").hidden = tab === "queue";
-  $("sort-list").hidden = tab === "queue";
+  const sortCtl = $("sort-list");
+  sortCtl.hidden = tab !== "songs";
+  if (tab !== "songs") sortCtl.hidden = true;
   if (tab === "queue") { $("list").hidden = false; return renderQueueList(); }
   $("list").hidden = false;
   $("list").className = "list";
   const list = ensureList("libraryList", $("list"));
-  await list.setLoader(loader(`/api/library/${tab}`, (page) => (page.items || []).map((x) => ({ ...x, name: x.name || x.title }))));
+  if (tab === "songs" && sortMode === "recent") return loadRecentlyAdded(list);
+  await list.setLoader(titleLoader(tab));
 }
+
+// "Recently added" is store-backed: the local walk's first_seen watermark,
+// newest first. Apple's own listing is alphabetical — the label used to
+// promise recency the API doesn't deliver (found live).
+let sortMode = "recent";
+function renderSortLabel() {
+  $("sort-list").textContent = sortMode === "recent"
+    ? "Sorted: recently added ⌄" : "Sorted: title A–Z ⌄";
+}
+function titleLoader(tab) {
+  return loader(`/api/library/${tab}`, (page) => (page.items || []).map((x) => ({ ...x, name: x.name || x.title })));
+}
+async function loadRecentlyAdded(list) {
+  renderSortLabel();
+  try {
+    const page = await get("/api/library/diff", { since: 0, what: "added", limit: 50 });
+    const rows = (page.added?.items || []).map((x) => ({ ...x, id: x.catalog_id || x.library_id, type: "library-songs" }));
+    if (!rows.length) throw Object.assign(new Error("walk"), { walk: true });
+    await list.setLoader(async (offset) => {
+      const p = await get("/api/library/diff", { since: 0, what: "added", limit: 50, offset });
+      const items = (p.added?.items || []).map((x) => ({ ...x, id: x.catalog_id || x.library_id, type: "library-songs" }));
+      return { items, next_offset: p.added?.next_offset ?? null };
+    });
+  } catch (e) {
+    if (e?.walk) {
+      toast("The local library walk hasn't indexed yet — showing A–Z");
+      sortMode = "title";
+      renderSortLabel();
+      await list.setLoader(titleLoader("songs"));
+    } else toast(e.message || "Could not load recently added");
+  }
+}
+$("sort-list").onclick = () => {
+  sortMode = sortMode === "recent" ? "title" : "recent";
+  renderSortLabel();
+  loadLibrary("songs");
+};
 
 let latestState = null, liveQueue = [];
 function queueRow(t, i, compact = false) {
@@ -253,7 +292,6 @@ $("playlist-shuffle").onclick = () => { if (!playlistRows.length) return; const 
 $("queue-view-all").onclick = () => { navigate("browse"); loadLibrary("queue"); };
 $("rail-queue").onclick = () => { navigate("browse"); loadLibrary("queue"); };
 $("home-lyrics").onclick = $("open-lyrics").onclick = () => lyrics.toggle();
-$("sort-list").onclick = () => toast("Showing recently added first");
 $("profile-button").onclick = $("settings").onclick = () => { $("keyprompt").hidden = false; };
 $("mobile-menu").onclick = () => { mobileOpen = !mobileOpen; $("sidebar").classList.toggle("open", mobileOpen); };
 $("mobile-player-button").onclick = () => { $("mobile-sheet").hidden = false; };
