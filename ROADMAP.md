@@ -161,25 +161,25 @@ chat log. Surface additions land HERE or wait for 1.x.*
 
 *Works on a fresh VM, tested without an Apple account in CI.*
 
-- [ ] **Install script + systemd generator** — bare-metal in one command
+- [x] **Install script + systemd generator** — bare-metal in one command
       `S P1` (#52, #132–#134: script, unit generator, the fresh-VM
       runbook test — the actual proof)
-- [ ] **Recorded-fixture offline harness in CI** — the live suite stays
+- [x] **Recorded-fixture offline harness in CI** — the live suite stays
       manual; CI gains fixture-driven regression coverage `M P1`
       (#53, #135–#137: runner, corpus + conformance diff, live-vs-mock
       parity checks)
-- [ ] **Deploy docs: the tunnel era** — funnel vs quick tunnel vs LAN
+- [x] **Deploy docs: the tunnel era** — funnel vs quick tunnel vs LAN
       (quick tunnels starve SSE; funnels don't — found live) `S P1` (#190)
 - [ ] **Jellyfin/Plex metadata bridge** `L P2` (#185, spike first)
-- [ ] **ESP32 now-playing display recipe** `S P2` (#186 — the overlay
-      endpoint exists for exactly this)
+- [x] **ESP32 now-playing display recipe** — shipped as the Tidbyt Gen 2
+      firmware integration (v0.9.0) `S P2` (#186)
 - [ ] **Voice-control skill** `M P2` (#187 — HA Assist / platform TBD)
 
 ## v1.0.0 — rc & soak
 
 *Feature freeze is the feature.*
 
-- [ ] **`v1.0.0-rc.1`** — fixes only; the deprecation cycles from v0.8
+- [x] **`v1.0.0-rc.1`** — fixes only; the deprecation cycles from v0.8
       run; the live install soaks it for real (this box); docs get their
       final pass `S P0`
 - [ ] **`v1.0.0`** — when the surface is stable, documented, backed up,
