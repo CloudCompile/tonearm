@@ -50,49 +50,6 @@ Passthrough-Put
 |---|---|---|---|
 | `path` | path | yes |  |
 
-### `GET /api/api/device/serial/console`
-
-Console
-
-| Parameter | In | Required | Description |
-|---|---|---|---|
-| `n` | query | no |  |
-
-### `GET /api/api/device/serial/file`
-
-Proxy File
-
-| Parameter | In | Required | Description |
-|---|---|---|---|
-| `url` | query | yes |  |
-
-### `GET /api/api/device/serial/ops`
-
-Get Ops
-
-| Parameter | In | Required | Description |
-|---|---|---|---|
-| `pop` | query | no |  |
-| `token` | query | no |  |
-
-### `POST /api/api/device/serial/ops`
-
-Push Op
-
-### `GET /api/api/device/serial/results`
-
-Get Results
-
-| Parameter | In | Required | Description |
-|---|---|---|---|
-| `n` | query | no |  |
-
-### `POST /api/api/device/serial/results`
-
-Post Result
-
-Takes a JSON body (see schema in `/docs`).
-
 ### `GET /api/audio/status`
 
 Status
