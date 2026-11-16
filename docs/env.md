@@ -13,10 +13,10 @@ variable (or a compose env file).
 | `TONEARM_AUTO_CHROME` | `1` | launch Chrome automatically if not reachable |
 | `TONEARM_HEADLESS` | `1` | headless chrome (set `0` for audible playback) |
 | `TONEARM_HOST` / `TONEARM_PORT` | `127.0.0.1` / `8188` | bind address |
-| `TONEARM_API_KEY` | *(unset)* | the MASTER key — full access, never rate-limited. Scoped keys for friends live in the keys file (below) |
+| `TONEARM_API_KEY` | `~/.config/tonearm/master-key.txt` | the MASTER key — full access, never rate-limited. The environment variable wins; the fallback file must be private (`chmod 600`). Scoped keys for friends live in the keys file (below) |
 | `TONEARM_KEYS_FILE` | next to the store db | the multi-key registry (0600 JSON, hashes only) |
 | `TONEARM_SSE_CAP` | `3` | concurrent live-stream connections per scoped key |
-| `TONEARM_STRICT_BIND` | `0` | make a non-localhost bind **without** `TONEARM_API_KEY` fatal instead of a loud warning (default warn-only — inside a container, binding `0.0.0.0` is normal; the port mapping is the boundary) |
+| `TONEARM_STRICT_BIND` | `0` | make a non-localhost bind **without** a master key (environment or private fallback file) fatal instead of a loud warning (default warn-only — inside a container, binding `0.0.0.0` is normal; the port mapping is the boundary) |
 | `TONEARM_ENABLE_WRITES` | `0` | unlocks favorite/playlist mutations |
 | `TONEARM_CACHE` / `TONEARM_CACHE_TTL` | `1` / `30` | read cache for amp-api GETs (single-flight coalesced; catalog 10×, favorites/ratings capped at 10s; mutations bust everything and open an 8s no-cache grace window — see `tonearm/cache.py`) |
 | `TONEARM_FAV_PLAYLIST` | `Favorite Songs` | name of the favorites auto-playlist |

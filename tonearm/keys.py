@@ -2,10 +2,11 @@
 
 The model, stated plainly:
 
-* `TONEARM_API_KEY` (the legacy env) remains the MASTER key: all scopes,
-  no rate ceiling. It bootstraps everything else. If it's unset, the
-  server runs keyless exactly as before — multi-key is opt-in by
-  creating keys.
+* `TONEARM_API_KEY` (or, when unset, the private
+  `~/.config/tonearm/master-key.txt` fallback) remains the MASTER key: all
+  scopes, no rate ceiling. It bootstraps everything else. If neither is
+  configured, the server runs keyless exactly as before — multi-key is
+  opt-in by creating keys.
 * Additional keys live in a 0600 JSON file (`keys.json`, next to the
   store db). The file stores HASHES (sha256) — a leaked keys file must
   not leak keys. A raw key is shown exactly once, at creation
