@@ -117,11 +117,20 @@ def start_snapshot_refresher():
     import traceback
 
     def _loop():
+        n = 0
         while True:
             try:
                 snap = mk.snapshot()
                 if snap:
                     _remember(snap)
+                n += 1
+                if n % 3 == 0:  # every ~30s: what does the eval path ACTUALLY see?
+                    from ..browser import browser as _tb
+                    where = _tb.eval("(() => location.href + ' | mk=' + (typeof MusicKit) + ' | auth=' + !!(window.MusicKit && MusicKit.getInstance() && MusicKit.getInstance().musicUserToken))()", timeout=10)
+                    print(f"REFRESHER[{n}]: playing={snap.get('isPlaying') if snap else None} "
+                          f"title={snap.get('title') if snap else None!r} "
+                          f"where={where} "
+                          f"target={getattr(_tb, '_target_id', '?')}", flush=True)
             except Exception:
                 traceback.print_exc()
             time.sleep(10)

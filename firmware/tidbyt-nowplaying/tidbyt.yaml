@@ -1,3 +1,9 @@
+# LEGACY / VARIANT CONFIG (not the current main production firmware).
+#
+# Current main firmware: `tidbyt-minimal-a2dp.yaml` (Tonearm Tidbyt 0.4.x)
+# with updated display/audio/offline behavior, gestures, and OTA/reporting.
+# Review and update this file before use if you need this variant.
+#
 # Tidbyt Gen 2 → tonearm: now-playing display + gesture remote.
 #
 # Flash once over USB (esphome run tidbyt.yaml from any machine with the
@@ -9,7 +15,8 @@
 #   ESP32 · 64x32 HUB75 matrix · touch pad (GPIO33, capacitive) ·
 #   bootloader unlocked.
 #
-# Gestures (the spec):
+# Gestures (original spec; current main firmware differs — see
+# `tidbyt-minimal-a2dp.yaml` / firmware README):
 #   1 tap            → play/pause toggle
 #   2 taps           → next track
 #   3 taps           → "back" — restart if >10s into the song, else the

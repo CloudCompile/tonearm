@@ -27,13 +27,13 @@ def _mock_404():
                                  "there is no renderer producing sound")
 
 
-async def _stream(fmt, bitrate, loudnorm, request):
+async def _stream(fmt, bitrate, loudnorm, request, join_pad=True):
     _mock_404()
     spec = FORMATS[fmt]
 
     def _sub():                                      # never block the loop
         try:
-            return broadcaster.subscribe(fmt, bitrate, loudnorm), None
+            return broadcaster.subscribe(fmt, bitrate, loudnorm, join_pad), None
         except AudioError as e:
             return None, str(e)
 
@@ -68,13 +68,15 @@ async def _stream(fmt, bitrate, loudnorm, request):
 
 @router.get("/stream.mp3")
 async def stream_mp3(request: Request, bitrate: str = None,
-                     loudnorm: int = None):
+                     loudnorm: int = None, join_pad: int = 1):
     """Live mp3 of whatever the server's Apple Music session is playing.
     Point an <audio> element at it. ~1-2 s behind the reported playhead —
     X-Tonearm-Join-* headers describe the alignment at subscribe time."""
     _mock_404()
     ln = None if loudnorm is None else bool(loudnorm)
-    return await _stream("mp3", bitrate, ln, request)
+    # Embedded low-latency clients (e.g. Tidbyt) can opt out of the default
+    # 2s alignment pad; browser listeners retain the synchronized default.
+    return await _stream("mp3", bitrate, ln, request, join_pad=bool(join_pad))
 
 
 @router.get("/stream.ogg")

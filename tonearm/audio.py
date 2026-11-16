@@ -61,6 +61,11 @@ LOUDNORM = "loudnorm=I=-16:TP=-1.5:LRA=11"   # streaming target: -16 LUFS
 SILENCE_SECS = 2                              # pre-encoded join pad length
 
 
+def join_pad_ms(join_pad=True):
+    """Return the optional stream-start silence, in milliseconds."""
+    return SILENCE_SECS * 1000 if config.audio_join_pad and join_pad else 0
+
+
 class AudioError(RuntimeError):
     pass
 
@@ -257,7 +262,7 @@ class Broadcaster:
 
     # ------------------------------------------------------------ subscribe
 
-    def subscribe(self, fmt="mp3", bitrate=None, loudnorm=None):
+    def subscribe(self, fmt="mp3", bitrate=None, loudnorm=None, join_pad=True):
         """(queue, join_meta) for one listener of one format.
 
         join_meta: {pad_ms, playhead_ms, stale} — the response headers are
@@ -280,7 +285,7 @@ class Broadcaster:
             q._tonearm_pipeline = pipe                  # unsubscribe routing
             pipe._subs.add(q)
         playhead_ms, stale = join_playhead()
-        pad_ms = SILENCE_SECS * 1000 if config.audio_join_pad else 0
+        pad_ms = join_pad_ms(join_pad)
         if pad_ms and pipe._silence:
             q.put_nowait(pipe._silence)
         return q, {"pad_ms": pad_ms if pipe._silence else 0,

@@ -1,104 +1,91 @@
-# The dead Tidbyt Gen 2 → tonearm now-playing + speaker + remote
+# Tonearm Tidbyt firmware (`firmware/tidbyt-nowplaying/`)
 
-The Tidbyt Gen 2 (the pixel display with the touch pad and speaker)
-outlived its company: the hardware is fine, the cloud is gone. The
-bootloader is unlocked, so it doesn't have to matter.
+ESPHome firmware and support configs for running a **Tidbyt Gen 2 (ESP32)** as a Tonearm companion device:
 
-This is the build that turns it into:
+- **Now-playing display (HUB75 64×32):** title/artist over a dimmed color artwork backdrop, progress bar, and playback indicator.
+- **Onboard speaker audio:** streams Tonearm audio (`/api/audio/stream.mp3`, `join_pad=0`) via the I2S media player when Wi‑Fi/DMA conditions allow.
+- **Touch gestures (remote control):** control Tonearm playback/playlists from the top pad.
+- **Offline-friendly behavior:** when Tonearm/Wi‑Fi is unreachable, the device keeps cached last-known track/art/progress, shows explicit offline state, can display an SNTP clock view (if time was previously synced), and supports limited local actions.
+- **OTA + status reporting:** checks/applies OTA updates and reports compact device status back to Tonearm.
 
-1. **A now-playing display** — a static CarPlay-style title/album/artist
-   stack, a small progress bar and elapsed time, with album art on the
-   right and a soft full-panel artwork wash behind it.
-2. **A speaker** — the Gen 2's I2S speaker streams tonearm's
-   `/api/audio/stream.mp3` live (the same "hear it here" the PWA
-   sidebar does).
-3. **A gesture remote** — the top pad controls playback:
+The main production configuration is **`tidbyt-minimal-a2dp.yaml`** (ESPHome node name kept for OTA/device identity continuity).
 
-| Gesture | Action |
-|---|---|
-| 1 tap | play / pause |
-| 2 taps | next track |
-| 3 taps | **back** — restart if >10s into the song, else the previous track |
-| hold ~1s | play **playlist 1** |
-| hold twice | play **playlist 2** |
+> **Build environment:** use **ESPHome 2025.8.0** (validated for this HUB75 + Arduino + I2S media stack). Prefer building/flashing workflows in an **e2b sandbox** (see repo `AGENTS.md`) rather than on the production VPS.
 
-The display defaults to **auto** mode: when synced lyrics exist, the
-right-hand art tile becomes a three-line lyrics tile (previous dim,
-current bright, next dim); otherwise it remains album art.
+## Current behavior (main firmware, 0.4.27 line)
 
-**Volume**: the speaker boots at 80%. Adjust the source loudness from
-the tonearm PWA (`POST /api/playback/volume/<0-100>`), or edit the
-`media_player.volume_set` value in the yaml and reflash for a different
-boot volume.
+### Display
+- HUB75 matrix (FM6126A, 64×32), known-good Gen 2 pin mapping, complete-frame redraw.
+- Shows title, artist, dimmed artwork backdrop (server-generated raw RGB565 backdrop), progress bar, and a small playing indicator.
+- Progress is **interpolated locally** between 5s server polls and shifted by `audio_offset_ms` (default 1500ms, configurable in substitutions) so the bar better matches audible playback.
+- **Offline UX:** if now-playing data is stale/unreachable, the screen indicates offline while keeping cached content; tap can toggle between cached track view and clock view (clock requires prior SNTP sync).
 
-The 10s rule lives **server-side** (`POST /api/playback/back`) so the
-button stays dumb — Apple's own skipToPreviousItem restarts at ~3s,
-which no remote control wants.
+### Audio
+- Starts audio after Wi‑Fi connect with a guarded delay (DMA/heap checks, once-per-boot attempt logic) and streams from `${tonearm_base}/api/audio/stream.mp3?join_pad=0&api_key=...`.
+- Audio is best-effort and depends on network/Tonearm availability and device memory conditions.
 
-## Flash it (once, over USB)
+### Touch gestures
+| Gesture | Online action | Offline/local behavior |
+|---|---|---|
+| 1 tap | Play / pause toggle | Toggle offline view (last track ↔ clock) |
+| 2 taps | Next track | No-op |
+| 3 taps | Back (restart if >10s, else previous) | No-op |
+| Hold ~0.8–2.5s, release | Shuffle **Favorites** and play it | Cycle panel brightness locally |
+| Hold, release, hold again | Shuffle **Heavy Rotation** and play it | No-op |
 
-1. Create the device's own scoped key (revocable, rate-capped):
+Default playlist IDs are set in substitutions (`playlist_1_id` = Favorites, `playlist_2_id` = Heavy Rotation); adjust for your library.
 
+## Control center
+
+Tonearm includes a **Tidbyt Control Center** web UI at **`/tidbyt`** (and raw device status at `/tidbyt-status`) for:
+- Monitoring device status (firmware/version, state, last report age, uptime, Wi‑Fi RSSI, DMA heap, IP)
+- Now playing view + transport controls (play/pause/prev/next/back)
+- Volume control and shuffle toggles
+- Library search and manual playback
+- Playlist browsing/playback
+- Arming OTA updates for the device
+
+Open it on your Tonearm host (e.g. `http://<tonearm-host>:8200/tidbyt`) and set the API key/base URL in “connection” if required.
+
+## Key files
+
+- **`tidbyt-minimal-a2dp.yaml`** — main production firmware (display + speaker + offline mode + gestures + OTA/reporting). Stable ESPHome node name.
+- **`tidbyt-status.yaml`** — lightweight remote status/bootstrap image.
+- **`tidbyt-bootstrap.yaml`**, **`tidbyt-migrate.yaml`**, **`tidbyt-recovery.yaml`**, **`tidbyt-rescue.yaml`**, **`provision.yaml`** — provisioning/migration/recovery/bootstrap variants for specific device states.
+- **`tidbyt-display*.yaml`, `tidbyt.yaml`** — additional/legacy display or integration variants; review before use.
+- **`external_components/`** — local components/helpers used by the firmware (HUB75 wrapper integration, art buffer/helpers, etc.).
+- **`dual_ota*.csv`** — partition tables (select the correct one for the device’s flash/partition layout).
+
+## Configuration
+
+Edit substitutions at the top of the target YAML (especially `tidbyt-minimal-a2dp.yaml`):
+- `tonearm_base` — Tonearm base URL/reachable relay endpoint used by the device
+- `tonearm_key` — device-scoped API key
+- `playlist_1_id`, `playlist_2_id` — playlist IDs for hold gestures
+- `audio_offset_ms` — progress-bar lag compensation to match audible delay
+
+Wi‑Fi credentials and secrets are provided via ESPHome secrets (e.g. `!secret wifi_ssid`, `!secret wifi_password`, `api_encryption_key`).
+
+## Build & flash notes
+
+1. Use **ESPHome 2025.8.0** (newer ESPHome releases changed components used by this stack).
+2. Validate/compile from this directory, preferably in an **e2b sandbox**:
    ```bash
-   python3 -m tonearm keys add tidbyt --scopes read,write --rate 120
-   ```
-
-2. Fill in the three substitutions at the top of
-   [`tidbyt.yaml`](tidbyt.yaml): the funnel URL, the device key, and the
-   two playlist ids (`/api/library/playlists`).
-
-3. Flash from Chrome (device plugged in by USB):
-
-   ```bash
-   cd firmware/tidbyt-nowplaying
-   # version PIN — newer esphome REMOVED the i2s_audio media_player,
-   # and the replacement (speaker media player) requires the ESP-IDF
-   # framework, which the HUB75 display wrapper doesn't build under.
-   # 2025.8.0 is the validated sweet spot: config-validates AND the
-   # full firmware compiles (we checked both, in a sandbox).
    pip install "esphome==2025.8.0"
-   esphome run tidbyt.yaml
+   esphome config tidbyt-minimal-a2dp.yaml
+   esphome compile tidbyt-minimal-a2dp.yaml
    ```
+3. First flash is typically over USB (Chrome Web ESPHome / `esphome run` with device attached). Subsequent updates can be delivered via OTA (manifest/arm flow) when the device is online and reachable.
+4. 2.4 GHz Wi‑Fi only. Hardware/pin mappings are Gen 2-specific and follow the known-good community mapping for this project.
 
-   (or drag the compiled binary onto https://web.esphome.io)
+## Operational notes
 
-After that it's WiFi-only: the device talks straight to tonearm's
-funnel URL — TLS, rate-capped, scoped. Revoke the key and the remote
-goes silent; the display dies with it (give it a read-only key if you
-want display-only mode).
+- OTA versions should only move forward; do not publish numeric downgrades over newer firmware.
+- If Tonearm is down/unreachable, playback/streaming control requires connectivity to return, but the device retains offline display/cache/local UI behavior.
+- “Display stability first”: avoid changing audio/routing/timing flags during display-only experiments.
+- Device-specific tuning (timing, thresholds, offsets) may vary by hardware/network conditions.
 
-## Hardware notes (Gen 2, from the community pin map)
+## Status
 
-- ESP32-S3 · 64×32 HUB75 matrix (FM6126A driver) · touch pad GPIO33
-- Speaker: I2S out — BCLK GPIO12, WS GPIO13, DOUT GPIO14
-- Display pins and driver flags: see the yaml (proven by the
-  ESPHome-on-Tidbyt-Gen2 thread; we did not have to guess a pin)
-
-## First-boot gotchas
-
-- 2.4 GHz WiFi only.
-- The device's http_request can't pin TLS certs under the arduino
-  framework (ESP-IDF-only feature) — `verify_ssl: false` is set. The
-  scoped key is the auth; the device lives on your LAN. If you want
-  cert pinning, that's the IDF migration (and a new display wrapper).
-- If the display stays dark: the HUB75 power switch (below) is
-  ALWAYS_ON, so it's wiring — reseat the panel ribbon.
-- Volume: `POST /api/playback/volume/<0-100>` or any tonearm surface —
-  the device's volume is set at boot to 80%.
-
-## Preview files
-
-The repository includes separate full-view previews:
-
-- `docs/tidbyt-preview-auto-lyrics.png`
-- `docs/tidbyt-preview-artwork.png`
-- `docs/tidbyt-preview-paused.png`
-- `docs/tidbyt-preview-idle.png`
-
-## What works vs what's proven
-
-- Config: **validates** on esphome 2025.8.0.
-- Full firmware: **compiles** in CI-like sandbox (toolchain + link).
-- On-device behavior: needs YOUR hardware — flash and report back.
-  The pin map is community-proven (ESPHome-on-Tidbyt-Gen2 thread), so
-  the risk is tuning (touch threshold, scroll speed), not wiring.
+- Main firmware line: **0.4.27** (local config/build line as of this sweep; published OTA state may differ by environment).
+- On-device behavior depends on your Tidbyt hardware, network, and Tonearm server availability.

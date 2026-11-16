@@ -12,7 +12,7 @@ import unittest
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from tonearm.audio import FORMATS, BITRATE_RE, Pipeline, join_playhead, \
-    note_playhead
+    join_pad_ms, note_playhead
 
 
 class TestFormats(unittest.TestCase):
@@ -76,6 +76,28 @@ class TestJoinPlayhead(unittest.TestCase):
             A._playhead.update(elapsed_ms=None, ts=0)
         ms, _ = join_playhead()
         self.assertIsNone(ms, "no state must be None — not a fake 0:00")
+
+
+class TestTidbytJoinPad(unittest.TestCase):
+    def test_default_browser_pad_remains_enabled(self):
+        import tonearm.audio as A
+        old = A.config.audio_join_pad
+        A.config.audio_join_pad = True
+        try:
+            self.assertEqual(join_pad_ms(), 2000)
+            self.assertEqual(join_pad_ms(join_pad=False), 0)
+        finally:
+            A.config.audio_join_pad = old
+
+    def test_global_pad_off_overrides_client_request(self):
+        import tonearm.audio as A
+        old = A.config.audio_join_pad
+        A.config.audio_join_pad = False
+        try:
+            self.assertEqual(join_pad_ms(), 0)
+            self.assertEqual(join_pad_ms(join_pad=False), 0)
+        finally:
+            A.config.audio_join_pad = old
 
 
 if __name__ == "__main__":

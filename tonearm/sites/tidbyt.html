@@ -1,16 +1,175 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Tidbyt remote — tonearm</title>
-<link rel="stylesheet" href="/sites/common.css">
-<style>
-  .hero{display:flex;gap:18px;align-items:center}.hero img{width:128px;height:128px;object-fit:cover;border-radius:14px;background:#20212a}.meta{min-width:0}.meta h1{margin:.15rem 0}.meta p{margin:.2rem 0}.rows{display:grid;gap:6px}.row{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;background:rgba(255,255,255,.04);cursor:pointer}.row:hover{background:rgba(250,45,72,.14)}.row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.row small{margin-left:auto;color:var(--muted)}input,select{width:100%;box-sizing:border-box;padding:9px;border-radius:9px;border:1px solid #444;background:#14151b;color:inherit}.controls{display:flex;gap:8px;flex-wrap:wrap}.controls button{min-width:74px}.two{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:700px){.two{grid-template-columns:1fr}.hero img{width:92px;height:92px}}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Tidbyt Control Center — tonearm</title>
+  <link rel="stylesheet" href="/sites/common.css">
+  <style>
+    :root {
+      --bg: #090a0f; --panel: #12141b; --panel2: #181b24; --line: #272b37;
+      --text: #eef1f7; --dim: #98a2b3; --accent: #ff4d6d; --accent2: #6ee7ff;
+      --ok: #34d399; --warn: #fbbf24; --err: #fb7185;
+    }
+    body { background: radial-gradient(1200px 500px at 20% -10%, #1a1f2d 0%, var(--bg) 55%), var(--bg); }
+    main { max-width: 1180px; padding: 16px; }
+    .topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:14px; }
+    .brand { font-size: 18px; font-weight: 700; letter-spacing: .02em; }
+    .brand span { color: var(--accent); }
+    .sub { color: var(--dim); font-size: 12px; }
+    .grid { display:grid; grid-template-columns: 1.05fr .95fr; gap:14px; }
+    @media (max-width: 900px){ .grid { grid-template-columns: 1fr; } }
+    .card { background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0)) , var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; }
+    .card h2 { margin:0 0 10px; font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--dim); }
+    .hero { display:grid; grid-template-columns: 180px 1fr; gap:14px; align-items:center; }
+    @media (max-width: 560px){ .hero { grid-template-columns: 1fr; } .art { width:100%; max-width:260px; aspect-ratio:1; margin:0 auto; } }
+    .art { width:180px; height:180px; border-radius:14px; background:#0b0d12; object-fit:cover; border:1px solid var(--line); box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+    .np-title { font-size:22px; font-weight:700; margin:2px 0 4px; line-height:1.15; }
+    .np-meta { color:var(--dim); margin:2px 0; }
+    .progress { margin-top:10px; }
+    .barwrap { height:8px; background:#0c0e14; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
+    .barfill { height:100%; width:0%; background: linear-gradient(90deg, var(--accent), #ff8aa1); transition: width .25s linear; }
+    .times { display:flex; justify-content:space-between; color:var(--dim); font-size:12px; margin-top:4px; font-variant-numeric: tabular-nums; }
+    .controls { display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+    button.act { border-radius:10px; padding:8px 14px; font-weight:600; }
+    button.act.primary { background: var(--accent); border-color: var(--accent); }
+    .rowline { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .kv { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:8px; }
+    @media (max-width:560px){ .kv { grid-template-columns: 1fr; } }
+    .stat { background: var(--panel2); border:1px solid var(--line); border-radius:12px; padding:10px 12px; }
+    .stat .k { color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+    .stat .v { font-size:15px; font-weight:650; margin-top:2px; word-break:break-word; }
+    .pill.live { color:#06130d; background:var(--ok); border-color:var(--ok); }
+    .pill.stale { color:#2b0b12; background:var(--warn); border-color:var(--warn); }
+    .pill.off { color:#fff; background:#3a3f4d; border-color:#3a3f4d; }
+    .searchrow { display:flex; gap:8px; }
+    .searchrow input { flex:1; }
+    .list { display:flex; flex-direction:column; gap:6px; max-height: 360px; overflow:auto; padding-right:2px; }
+    .item { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:10px; background:var(--panel2); border:1px solid var(--line); cursor:pointer; }
+    .item:hover { border-color:#3a4254; background:#1d2230; }
+    .item .t { font-weight:600; }
+    .item .s { color:var(--dim); font-size:12px; }
+    .item .grow { min-width:0; flex:1; }
+    .item .grow > div { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .tag { font-size:11px; color:var(--dim); border:1px solid var(--line); border-radius:999px; padding:2px 8px; }
+    .vol { display:flex; align-items:center; gap:10px; margin-top:10px; }
+    .vol input[type=range] { flex:1; accent-color: var(--accent); }
+    .split { display:grid; grid-template-columns: 1fr 1fr; gap:12px; }
+    @media (max-width:900px){ .split { grid-template-columns:1fr; } }
+    .muted-note { color:var(--dim); font-size:12px; margin-top:8px; }
+    .mini-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:10px; }
+    .footer-note { color:var(--dim); font-size:12px; margin-top:12px; }
+    .dangerish { border-color:#4a2a33 !important; }
+  </style>
 </head>
-<body><main>
-  <section class="hero"><img id="art" alt=""><div class="meta"><div class="dim small">TIDBYT REMOTE</div><h1 id="title">nothing playing</h1><p id="artist" class="dim"></p><p id="album" class="dim small"></p><div class="controls"><button id="toggle">play</button><button id="prev">previous</button><button id="next">next</button><button id="back">smart back</button></div></div></section>
-  <section><h2>Search library and catalog</h2><input id="search" placeholder="song, artist, album…"><div id="results" class="rows"></div></section>
-  <section class="two"><div><h2>Playlists</h2><div id="playlists" class="rows"></div></div><div><h2>Tidbyt settings</h2><label>Display mode<select id="mode"><option>auto</option><option>artwork</option><option>lyrics</option></select></label><p class="dim small">Auto shows synced lyrics in the right tile when available; otherwise album art.</p><label>Speaker volume<input id="volume" type="range" min="0" max="100" value="80"></label><p class="dim small">This controls the Tidbyt speaker, not the Apple Music source.</p></div></section>
-  <section><h2>Button assignments</h2><div class="two"><label>Hold<select id="hold"></select></label><label>Double hold<select id="double-hold"></select></label></div><button id="save" class="act">Save device settings</button></section>
-</main><script type="module" src="/sites/tidbyt.js"></script></body></html>
+<body>
+<main>
+  <div class="topbar">
+    <div>
+      <div class="brand">Tidbyt <span>Control Center</span></div>
+      <div class="sub">Play music, control volume, and monitor your Tidbyt in one place</div>
+    </div>
+    <div class="rowline">
+      <span id="dev-pill" class="pill off">device: —</span>
+      <button class="act" id="settings-btn" type="button">connection</button>
+      <button class="act" id="refresh-btn" type="button">refresh</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2>Now Playing</h2>
+      <div class="hero">
+        <img id="art" class="art" alt="Artwork" src="">
+        <div>
+          <div id="np-state" class="sub">—</div>
+          <div id="np-title" class="np-title">Nothing playing</div>
+          <div id="np-artist" class="np-meta">—</div>
+          <div id="np-album" class="np-meta">—</div>
+          <div class="progress">
+            <div class="barwrap"><div id="bar" class="barfill"></div></div>
+            <div class="times"><span id="elapsed">0:00</span><span id="duration">0:00</span></div>
+          </div>
+          <div class="controls">
+            <button class="act" id="prev" type="button">Prev</button>
+            <button class="act" id="back" type="button" title="Restart if >10s, else previous">Back</button>
+            <button class="act primary" id="toggle" type="button">Play</button>
+            <button class="act" id="next" type="button">Next</button>
+          </div>
+          <div class="vol">
+            <button class="act" id="mute" type="button">Mute</button>
+            <input id="volume" type="range" min="0" max="100" value="50" aria-label="Volume">
+            <span id="vol-label" class="sub" style="width:42px;text-align:right">50%</span>
+          </div>
+          <div class="mini-actions">
+            <button class="act" id="shuffle-off" type="button">Shuffle off</button>
+            <button class="act" id="shuffle-on" type="button">Shuffle on</button>
+            <button class="act" id="play-fav" type="button">Play Favorites (shuffled)</button>
+            <button class="act" id="play-heavy" type="button">Play Heavy Rotation (shuffled)</button>
+          </div>
+          <div class="muted-note">Tip: on-device hold = shuffle Favorites, hold-release-hold = shuffle Heavy Rotation. 1 tap toggles track/clock when offline.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Tidbyt Device</h2>
+      <div class="kv">
+        <div class="stat"><div class="k">Device</div><div class="v" id="d-device">—</div></div>
+        <div class="stat"><div class="k">Firmware</div><div class="v" id="d-version">—</div></div>
+        <div class="stat"><div class="k">State</div><div class="v" id="d-state">—</div></div>
+        <div class="stat"><div class="k">Last report</div><div class="v" id="d-age">—</div></div>
+        <div class="stat"><div class="k">Uptime</div><div class="v" id="d-uptime">—</div></div>
+        <div class="stat"><div class="k">Wi‑Fi RSSI</div><div class="v" id="d-rssi">—</div></div>
+        <div class="stat"><div class="k">DMA heap</div><div class="v" id="d-dma">—</div></div>
+        <div class="stat"><div class="k">IP</div><div class="v" id="d-ip">—</div></div>
+      </div>
+      <div class="mini-actions" style="margin-top:12px">
+        <button class="act" id="arm-update" type="button">Arm OTA to latest published</button>
+        <button class="act" id="open-status" type="button">Open raw status page</button>
+      </div>
+      <div id="update-msg" class="footer-note">OTA updates are published separately; this arms the device to pick up the current manifest version when available.</div>
+    </section>
+  </div>
+
+  <div class="split" style="margin-top:14px">
+    <section class="card">
+      <h2>Search & Play Songs</h2>
+      <div class="searchrow">
+        <input id="search" type="search" placeholder="Search your library…" autocomplete="off">
+        <button class="act" id="search-btn" type="button">Search</button>
+      </div>
+      <div id="search-results" class="list" style="margin-top:10px"></div>
+      <div class="muted-note">Click a song to play it now. Albums/playlists/artists from search can be played as collections where supported.</div>
+    </section>
+
+    <section class="card">
+      <h2>Playlists</h2>
+      <div class="rowline" style="margin-bottom:10px">
+        <button class="act" id="load-playlists" type="button">Load playlists</button>
+        <span class="sub">Play any playlist on your Tidbyt-connected session</span>
+      </div>
+      <div id="playlists" class="list"></div>
+    </section>
+  </div>
+
+  <div class="footer-note">Control center talks to your local Tonearm server APIs. If requests fail with auth errors, set the API key/base URL in “connection”.</div>
+</main>
+
+<dialog id="settings-dialog">
+  <form method="dialog">
+    <h3 style="margin-top:0">Tonearm connection</h3>
+    <p class="sub">Base URL (blank = this origin)</p>
+    <input id="base-url" style="width:100%" placeholder="http://127.0.0.1:8200">
+    <p class="sub" style="margin-top:10px">API key (if required)</p>
+    <input id="api-key" type="password" style="width:100%" placeholder="TONEARM_API_KEY">
+    <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:14px">
+      <button class="act" value="cancel" type="submit">Cancel</button>
+      <button class="act primary" id="save-settings" value="default" type="button">Save & reload</button>
+    </div>
+  </form>
+</dialog>
+
+<script type="module" src="/sites/tidbyt.js"></script>
+</body>
+</html>

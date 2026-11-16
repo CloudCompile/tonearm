@@ -4531,6 +4531,16 @@
        "title": "Loudnorm",
        "type": "integer"
       }
+     },
+     {
+      "in": "query",
+      "name": "join_pad",
+      "required": false,
+      "schema": {
+       "default": 1,
+       "title": "Join Pad",
+       "type": "integer"
+      }
      }
     ],
     "responses": {
