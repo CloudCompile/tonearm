@@ -59,11 +59,36 @@ catalog goes worldwide.
 ## [Unreleased]
 
 ### Added
-- **Tidbyt Gen 2 firmware** (`firmware/tidbyt-nowplaying/`): the dead-cloud
-  pixel display becomes a tonearm now-playing screen, stream speaker, and
-  gesture remote (1 tap toggle / 2 taps next / 3 taps smart-back / hold
-  playlist 1 / double hold playlist 2). ESPHome, pinned 2025.8.0; the
-  device authenticates with its own revocable scoped key.
+- (nothing yet)
+
+## [0.9.0] — 2026-11-16 — Install & Harness (Tidbyt stable)
+
+Tidbyt Gen 2 support is now stable/released, and the install + offline
+regression story lands for bare metal and CI.
+
+### Added
+- **Tidbyt Gen 2 firmware & device integration** (`firmware/tidbyt-nowplaying/`, `/api/device/tidbyt/*`): the dead-cloud pixel display becomes a tonearm
+  now-playing screen, stream speaker, and gesture remote (1 tap toggle / 2
+  taps next / 3 taps smart-back / hold playlist 1 / double hold playlist 2).
+  ESPHome pinned 2025.8.0; device authenticates with its own revocable scoped
+  key (OTA/log shipping/reporting/cmd polling endpoints).
+- **Install script** (`scripts/install.sh`, #132): venv bootstrap, dependency
+  install, 0700 Chrome profile dir, Chrome/audio-dep checks; safe to re-run.
+- **systemd unit generator** (`scripts/systemd_unit.py`, #133): emits a user
+  or system unit with proper detachment/restart policy, `XDG_RUNTIME_DIR`/
+  pulse env for audio, non-root defaults, and explicit key/profile handling.
+- **Fresh-VM runbook** (`docs/install.md`, #134): timed, documented proof path
+  for bare-metal installs.
+- **Offline route harness** (`tests/test_route_harness.py`,
+  `scripts/harness_routes.py`, #53/#135/#136): fixture-driven regression over
+  a mock server via plain urllib (no TestClient, no Chrome/Pulse/X, no Apple),
+  runnable in CI/unittest against synthetic fixtures.
+- **Live-vs-mock parity procedure** (`docs/harness-parity.md`, #137): manual
+  spot-check guide to catch fixture/value/ordering rot the model checks can't.
+- **Deploy docs: tunnel era** (`docs/deploy-tunnels.md`, #190): LAN vs
+  Tailscale Serve (tailnet) vs Tailscale Funnel (public, SSE-safe) vs
+  Cloudflare quick tunnels (pages work, SSE starved — avoid for live UI),
+  including key-prompt flow notes.
 
 ## [0.7.0] — 2026-11-13 — Multi-user
 
@@ -132,7 +157,8 @@ catalog goes worldwide.
 - Playback control, library/catalog search, favorites, the demo page,
   audio streaming at `/api/audio/stream.mp3`.
 
-[Unreleased]: https://github.com/CloudCompile/tonearm/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/CloudCompile/tonearm/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/CloudCompile/tonearm/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/CloudCompile/tonearm/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/CloudCompile/tonearm/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/CloudCompile/tonearm/compare/v0.6.1...v0.6.2

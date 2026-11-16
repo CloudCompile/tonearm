@@ -3,7 +3,7 @@
      if any route is missing from this page. -->
 # API reference
 
-**tonearm** — surface `0.7.0`. Every route below is from the
+**tonearm** — surface `0.9.0`. Every route below is from the
 OpenAPI contract of record; auth (Bearer key or `?api_key=`) applies to
 all `/api/` routes. Try it live at `/docs` on your own server.
 
@@ -50,6 +50,49 @@ Passthrough-Put
 |---|---|---|---|
 | `path` | path | yes |  |
 
+### `GET /api/api/device/serial/console`
+
+Console
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `n` | query | no |  |
+
+### `GET /api/api/device/serial/file`
+
+Proxy File
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `url` | query | yes |  |
+
+### `GET /api/api/device/serial/ops`
+
+Get Ops
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `pop` | query | no |  |
+| `token` | query | no |  |
+
+### `POST /api/api/device/serial/ops`
+
+Push Op
+
+### `GET /api/api/device/serial/results`
+
+Get Results
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `n` | query | no |  |
+
+### `POST /api/api/device/serial/results`
+
+Post Result
+
+Takes a JSON body (see schema in `/docs`).
+
 ### `GET /api/audio/status`
 
 Status
@@ -62,6 +105,7 @@ Stream Mp3
 |---|---|---|---|
 | `bitrate` | query | no |  |
 | `loudnorm` | query | no |  |
+| `join_pad` | query | no |  |
 
 ### `GET /api/audio/stream.ogg`
 
@@ -81,6 +125,10 @@ Stream Opus
 | `bitrate` | query | no |  |
 | `loudnorm` | query | no |  |
 
+### `GET /api/audio/stream.pcm`
+
+Stream Pcm
+
 ### `GET /api/audit`
 
 Export
@@ -91,6 +139,12 @@ Export
 | `limit` | query | no |  |
 | `offset` | query | no |  |
 
+### `POST /api/batch`
+
+Batch
+
+Takes a JSON body (see schema in `/docs`).
+
 ### `GET /api/catalog/charts`
 
 Charts
@@ -100,6 +154,7 @@ Charts
 | `types` | query | no |  |
 | `limit` | query | no |  |
 | `genre` | query | no |  |
+| `storefront` | query | no |  |
 
 ### `GET /api/catalog/hints`
 
@@ -109,6 +164,7 @@ Hints
 |---|---|---|---|
 | `term` | query | yes |  |
 | `types` | query | no |  |
+| `storefront` | query | no |  |
 
 ### `GET /api/catalog/search`
 
@@ -119,6 +175,7 @@ Catalog Search
 | `term` | query | yes |  |
 | `types` | query | no |  |
 | `limit` | query | no |  |
+| `storefront` | query | no |  |
 
 ### `GET /api/catalog/songs/{song_id}/lyrics`
 
@@ -128,6 +185,7 @@ Song Lyrics
 |---|---|---|---|
 | `song_id` | path | yes |  |
 | `raw` | query | no |  |
+| `storefront` | query | no |  |
 
 ### `GET /api/catalog/{resource}`
 
@@ -137,6 +195,7 @@ Catalog By Ids
 |---|---|---|---|
 | `resource` | path | yes |  |
 | `ids` | query | yes |  |
+| `storefront` | query | no |  |
 
 ### `GET /api/catalog/{resource}/{resource_id}`
 
@@ -147,6 +206,7 @@ Catalog Item
 | `resource` | path | yes |  |
 | `resource_id` | path | yes |  |
 | `extend` | query | no |  |
+| `storefront` | query | no |  |
 
 ### `GET /api/catalog/{resource}/{resource_id}/{relationship}`
 
@@ -159,10 +219,89 @@ Catalog Relationship
 | `relationship` | path | yes |  |
 | `limit` | query | no |  |
 | `offset` | query | no |  |
+| `storefront` | query | no |  |
 
 ### `GET /api/debug`
 
 Debug
+
+### `GET /api/device/serial/console`
+
+Console
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `n` | query | no |  |
+
+### `GET /api/device/serial/file`
+
+Proxy File
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `url` | query | yes |  |
+
+### `GET /api/device/serial/ops`
+
+Get Ops
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `pop` | query | no |  |
+| `token` | query | no |  |
+
+### `POST /api/device/serial/ops`
+
+Push Op
+
+### `GET /api/device/serial/results`
+
+Get Results
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `n` | query | no |  |
+
+### `POST /api/device/serial/results`
+
+Post Result
+
+Takes a JSON body (see schema in `/docs`).
+
+### `GET /api/device/tidbyt/cmd`
+
+Poll Cmd
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `device` | query | no |  |
+| `version` | query | no |  |
+
+### `POST /api/device/tidbyt/logs`
+
+Report Logs
+
+### `POST /api/device/tidbyt/opencode`
+
+Report Opencode
+
+Takes a JSON body (see schema in `/docs`).
+
+### `POST /api/device/tidbyt/report`
+
+Report Tidbyt
+
+Takes a JSON body (see schema in `/docs`).
+
+### `GET /api/device/tidbyt/status`
+
+Tidbyt Status
+
+### `POST /api/device/tidbyt/update`
+
+Trigger Update
+
+Takes a JSON body (see schema in `/docs`).
 
 ### `GET /api/favorites`
 
@@ -306,6 +445,14 @@ Recently Played
 ### `GET /api/personal/recommendations`
 
 Recommendations
+
+### `POST /api/playback/back`
+
+Back
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `threshold_ms` | query | no |  |
 
 ### `GET /api/playback/now-playing`
 
