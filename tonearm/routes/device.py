@@ -57,6 +57,10 @@ class OpenCodeReport(BaseModel):
     activity: str = Field(default="working", max_length=20)
 
 
+class DeviceCmd(BaseModel):
+    cmd: str = Field(description="Command for the device: 'update' or 'none'")
+
+
 @router.post("/tidbyt/report", response_model=DeviceAck)
 def report_tidbyt(body: DeviceReport, request: Request):
     identity = getattr(request.state, "identity", None)
@@ -107,7 +111,7 @@ async def trigger_update(request: Request, body: dict):
     return {"ok": True, "armed": device, "version": version}
 
 
-@router.get("/tidbyt/cmd")
+@router.get("/tidbyt/cmd", response_model=DeviceCmd)
 async def poll_cmd(device: str = "tidbyt-a2dp", version: str = ""):
     """Device-initiated poll (keyed like report). Returns cmd=update while
     a trigger is armed and unexpired for a version newer than reported."""

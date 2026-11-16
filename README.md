@@ -68,6 +68,9 @@ pip install -r requirements.txt
 # 1. one-time: sign in (opens a visible Chrome window)
 python -m tonearm.login
 
+#    over SSH/headless: terminal-driven (prompts for email/password/2FA)
+python -m tonearm.login --interactive
+
 # 2. serve (headless by default)
 python -m tonearm
 # → API docs at http://127.0.0.1:8188/docs
@@ -840,7 +843,7 @@ plan (effort- and priority-tagged, with non-goals stated honestly).
   **v0.7.0** multi-user (scoped keys, audit log) → **v0.8.0** the API
   freeze + docs site (+ batch endpoint, multi-storefront before the
   freeze) → **v0.9.0** install script + offline test harness (+ the
-  tunnel-era deploy docs) → **v1.0.0-rc** soak → **v1.0.0**
+  tunnel-era deploy docs) — **shipped** → **v1.0.0-rc** soak → **v1.0.0**
 
 ## Deploying
 

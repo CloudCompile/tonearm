@@ -23,12 +23,15 @@ theme:
 
 nav:
   - Home: index.md
-  - API reference: api-reference.md
-  - Configuration (env vars): env.md
-  - Field notes: field-notes.md
-  - Deprecation policy: deprecation.md
-  - Home Assistant recipes: ha-recipes.md
-  - Lyrics contract: lyrics-contract.md
+  - "Install & bare metal": install.md
+  - "Deploy: tunnels (LAN/funnel)": deploy-tunnels.md
+  - "API reference": api-reference.md
+  - "Configuration (env vars)": env.md
+  - "Field notes": field-notes.md
+  - "Deprecation policy": deprecation.md
+  - "Home Assistant recipes": ha-recipes.md
+  - "Lyrics contract": lyrics-contract.md
+  - "Harness: parity spot checks": harness-parity.md
 
 markdown_extensions:
   - admonition
