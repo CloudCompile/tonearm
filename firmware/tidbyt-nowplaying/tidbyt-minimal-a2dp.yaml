@@ -7,6 +7,7 @@
 # offline-friendly mode (reachability/staleness detection, cached last
 # track/art, SNTP clock view when time is synced, local brightness/view
 # actions when Tonearm/Wi‑Fi is unreachable).
+# 0.4.29: lyrics view word-wraps the whole sentence (no truncation).
 #
 # Build with ESPHome 2025.8.0 (validated toolchain for this stack). Prefer
 # building in an e2b sandbox (see repo AGENTS) rather than on the VPS.
@@ -18,16 +19,28 @@ substitutions:
   tonearm_key: "toneark_zmrFj8aKqstK5zlxwJ3wx5VgIk9E4NcV"
   playlist_1_id: "p.0YU08k07L9"
   playlist_2_id: "p.KoKOBXDS3Wm3o9P"
+  # Single source of truth for the firmware version — used by project
+  # metadata, the heartbeat, and the OTA cmd poll. Bump HERE only.
+  # (0.4.30 shipped still self-reporting 0.4.29 — the reason the armed
+  # trigger never disarmed and status showed a stale version.)
+  fw_version: "0.4.31"
   # Device audio playback lags the server playhead (decode/buffer). Subtract
   # this from the displayed progress so the bar matches what you hear.
+  # 0.4.28: recalibrated on-device after each audio start (offset_calibrated).
   audio_offset_ms: "1500"
+  # Night dimming (SNTP clock is always on-device): outside these hours the
+  # panel clamps to night_brightness unless the user set brightness manually
+  # in the last hour.
+  night_start: "22"
+  night_end: "7"
+  night_brightness: "40"
 
 esphome:
   name: tidbyt-minimal-a2dp
   friendly_name: Tidbyt Tonearm
   project:
     name: cloudcompile.tonearm_tidbyt
-    version: "0.4.27"
+    version: "${fw_version}"
   on_boot:
     priority: -100
     then:
@@ -35,6 +48,7 @@ esphome:
       - script.execute: report_status
   includes:
     - external_components/art_buf.h
+    - external_components/lyrics_wrap.h
   platformio_options:
     build_flags:
       - "-DBOARD_HAS_PSRAM"
@@ -45,8 +59,28 @@ esphome:
     board_build.arduino.memory_type: qio_qspi
 
 wifi:
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
+  # Multi-network failover (0.4.28): networks are tried in order; if the
+  # primary is unreachable the device hops to the next. Credentials live in
+  # secrets.yaml (chmod 600, never committed).
+  networks:
+    - ssid: !secret wifi_ssid
+      password: !secret wifi_password
+    - ssid: !secret wifi_ssid_2
+      password: !secret wifi_password_2
+    - ssid: !secret wifi_ssid_3
+      password: !secret wifi_password_3
+    - ssid: !secret wifi_ssid_4
+      password: !secret wifi_password_4
+    - ssid: !secret wifi_ssid_5
+      password: !secret wifi_password_5
+    - ssid: !secret wifi_ssid_6     # open network — no password
+    - ssid: !secret wifi_ssid_7
+      password: !secret wifi_password_7
+  # If every network fails: fallback AP portal so it can be re-provisioned
+  # without USB. (Password in secrets.yaml.)
+  ap:
+    ssid: !secret ap_ssid
+    password: !secret ap_password
   on_connect:
     then:
       - delay: 5s
@@ -56,35 +90,53 @@ wifi:
           id: tonearm_ok
           value: 'true'
       - script.execute: report_status
+      # Audio retry on reconnect (item 2, 0.4.28): first connect = attempt 0.
+      # Reconnects retry up to 2 more times, >=60s since the last attempt,
+      # always gated on DMA-capable heap (legacy I2S driver fails low and
+      # the media player then crashes — LoadProhibited, seen in v0.4.6).
       - if:
           condition:
-            # Start as soon as Wi-Fi is up, but only once this boot and only
-            # with enough DMA-capable RAM for the legacy I2S driver.
             lambda: |-
-              return !id(audio_fallback_tried) && ta_dma_heap() > 48000;
+              int attempts = (id(audio_fallback_tried) ? 1 : 0)
+                           + id(audio_retry_count);
+              bool cooldown_ok = id(audio_last_attempt_ms) == 0 ||
+                                 millis() - id(audio_last_attempt_ms) > 60000;
+              return attempts <= 2 && cooldown_ok && ta_dma_heap() > 48000;
           then:
             - globals.set:
                 id: audio_state
                 value: '"attempting"'
             - logger.log:
-                format: "audio fallback attempt: dma_heap=%u internal=%u largest=%u"
-                args: ['ta_dma_heap()', 'ta_internal_heap()', 'ta_internal_largest()']
+                format: "audio attempt: retries=%d dma_heap=%u internal=%u largest=%u"
+                args: ['id(audio_retry_count)', 'ta_dma_heap()', 'ta_internal_heap()', 'ta_internal_largest()']
             - globals.set:
                 id: audio_fallback_tried
                 value: 'true'
+            - globals.set:
+                id: audio_last_attempt_ms
+                value: !lambda 'return (int) millis();'
             - media_player.play_media:
                 id: onboard_speaker
                 media_url: "${tonearm_base}/api/audio/stream.mp3?join_pad=0&api_key=${tonearm_key}"
             - globals.set:
                 id: audio_state
                 value: '"command_sent"'
+            # Bump the retry counter only on reconnect attempts (the first
+            # boot attempt is counted via audio_fallback_tried above).
+            - if:
+                condition:
+                  lambda: 'return id(audio_last_attempt_ms) != 0 && id(audio_retry_count) < 2 && millis() > 60000;'
+                then:
+                  - globals.set:
+                      id: audio_retry_count
+                      value: !lambda 'return id(audio_retry_count) + 1;'
           else:
             - globals.set:
                 id: audio_state
                 value: '"skipped_low_dma"'
             - logger.log:
-                format: "audio unavailable: tried=%d dma_heap=%u (need >48000) — display-only mode"
-                args: ['id(audio_fallback_tried)', 'ta_dma_heap()']
+                format: "audio unavailable: retries=%d dma_heap=%u (need >48000) — display-only mode"
+                args: ['id(audio_retry_count)', 'ta_dma_heap()']
 esp32:
   board: esp32dev
   # GD25Q128 = 16MB. Written into the image header so the bootloader
@@ -160,6 +212,11 @@ number:
     id: matrix_brightness
     name: "Brightness"
 
+# Night dimming (item 4, 0.4.28): clamp the panel to night_brightness between
+# night_start and night_end (SNTP). A manual brightness change inside the
+# last hour wins (last_manual_brightness_ms) so user intent isn't fought.
+# (Intervals merged into the single `interval:` block below.)
+
 # Not needed (no api/web_server use); frees internal DRAM for BT/audio.
 mdns:
   disabled: true
@@ -190,9 +247,10 @@ script:
             Content-Type: "application/json"
           json:
             device: "tidbyt-a2dp"
-            version: "0.4.27"
+            version: "${fw_version}"
             ip: !lambda 'return std::string(WiFi.localIP().toString().c_str());'
             wifi_rssi: !lambda 'return std::to_string(WiFi.RSSI());'
+            ssid: !lambda 'return std::string(WiFi.SSID().c_str());'
             free_heap: !lambda 'return std::to_string(ESP.getFreeHeap());'
             internal_heap: !lambda 'return std::to_string(ta_internal_heap());'
             internal_largest_block: !lambda 'return std::to_string(ta_internal_largest());'
@@ -205,6 +263,29 @@ script:
               return std::to_string(ESP.getPsramSize());
             flash_bytes: !lambda |-
               return std::to_string(ESP.getFlashChipSize());
+      # Immediate OTA trigger poll (0.4.29): on every report cycle, ask the
+      # server for a pending update command instead of waiting for the
+      # 30min manifest refresh. Server answers {"cmd":"update"} while a
+      # trigger is armed; then re-check the manifest right away.
+      - if:
+          condition:
+            wifi.connected:
+          then:
+            - http_request.get:
+                url: "${tonearm_base}/api/device/tidbyt/cmd?device=tidbyt-a2dp&version=${fw_version}&api_key=${tonearm_key}"
+                capture_response: true
+                max_response_buffer_size: 1kB
+                on_response:
+                  then:
+                    - lambda: |-
+                        if (response->status_code != 200) return;
+                        json::parse_json(body, [](JsonObject root) {
+                          if (std::string(root["cmd"] | "") == "update") {
+                            ESP_LOGI("ota", "server cmd=update — refreshing manifest now");
+                            id(remote_firmware).perform(true);
+                          }
+                          return true;
+                        });
       - delay: 60s
       - script.execute: report_status
 
@@ -266,8 +347,70 @@ globals:
   - id: ui_mode
     type: int
     initial_value: '0'
+  # 0.4.28 view cycle (online + offline 1-tap): 0 now-playing, 1 big clock,
+  # 2 lyrics (online only; falls back to clock offline). The 5s-hold
+  # gesture (online) jumps directly between now-playing and lyrics.
+  - id: feedback_ms
+    type: uint32_t
+    initial_value: '0'
+  # Audio-offset calibration (item 1): after each audio start we compare
+  # the server playhead with local playback wall-time once and smooth it
+  # into offset_calibrated_ms (clamped 200..4000). Fallback: substitution.
+  - id: offset_calibrated_ms
+    type: int
+    initial_value: '1500'
+  - id: offset_meas_play_ms
+    type: uint32_t
+    initial_value: '0'
+  # Audio retry on reconnect (item 2): once-per-boot becomes 1 boot attempt
+  # + max 2 reconnect retries, >=60s apart.
+  - id: audio_retry_count
+    type: int
+    initial_value: '0'
+  - id: audio_last_attempt_ms
+    type: uint32_t
+    initial_value: '0'
+  # Night dimming (item 4): last manual brightness set time ( millis()).
+  - id: last_manual_brightness_ms
+    type: uint32_t
+    initial_value: '0'
+  # Lyrics view (item 7): the server's lyrics-now payload (current line +-1).
+  - id: lyrics_prev
+    type: std::string
+    initial_value: '""'
+  - id: lyrics_cur
+    type: std::string
+    initial_value: '""'
+  - id: lyrics_next
+    type: std::string
+    initial_value: '""'
+  - id: lyrics_have
+    type: bool
+    initial_value: 'false'
+  - id: offset_meas_server_ms
+    type: int
+    initial_value: '0'
+  - id: offset_meas_local_ms
+    type: int
+    initial_value: '0'
 
 interval:
+  # Night dimming (item 4): checked every minute.
+  - interval: 60s
+    then:
+      - lambda: |-
+          auto now = id(sntp_time).now();
+          if (!now.is_valid()) return;
+          int h = now.hour;
+          bool night = (h >= ${night_start}) || (h < ${night_end});
+          float cur = id(matrix_brightness).state;
+          bool manual_recent = id(last_manual_brightness_ms) != 0 &&
+                               millis() - id(last_manual_brightness_ms) < 3600000UL;
+          if (night && !manual_recent && cur > ${night_brightness}) {
+            id(matrix_brightness).make_call().set_value(${night_brightness}).perform();
+          } else if (!night && !manual_recent && cur <= ${night_brightness}) {
+            id(matrix_brightness).make_call().set_value(180).perform();
+          }
   - interval: 10s
     then:
       - http_request.get:
@@ -324,6 +467,59 @@ interval:
                   // "reachable"; anything else leaves cached data on screen.
                   id(tonearm_ok) = parsed;
                   if (parsed) id(last_good_ms) = (int) millis();
+                  // Audio-offset calibration (item 1): once per audio start,
+                  // ~15s in, compare the server playhead with the locally
+                  // interpolated playhead at the same wall moment. The delta
+                  // IS the audible lag; smooth it and clamp 200..4000ms.
+                  if (parsed && id(playing)) {
+                    int server_elapsed = id(elapsed_ms);
+                    int local_elapsed = id(elapsed_base_ms) +
+                        (int) (millis() - id(elapsed_base_at));
+                    if (id(offset_meas_play_ms) == 0 && server_elapsed > 15000
+                        && server_elapsed < 60000) {
+                      id(offset_meas_play_ms) = millis();
+                      id(offset_meas_server_ms) = server_elapsed;
+                      id(offset_meas_local_ms) = local_elapsed;
+                    } else if (id(offset_meas_play_ms) != 0
+                               && millis() - id(offset_meas_play_ms) > 5000) {
+                      int drift = (server_elapsed - id(offset_meas_server_ms))
+                                - (local_elapsed - id(offset_meas_local_ms));
+                      int new_off = id(offset_calibrated_ms) + drift / 2;
+                      if (new_off < 200) new_off = 200;
+                      if (new_off > 4000) new_off = 4000;
+                      id(offset_calibrated_ms) = new_off;
+                      id(offset_meas_play_ms) = 0;   // once per audio start
+                      ESP_LOGI("sync", "audio offset calibrated: %d ms", new_off);
+                    }
+                  } else if (parsed && !id(playing)) {
+                    id(offset_meas_play_ms) = 0;     // reset when paused
+                  }
+  - interval: 5s
+    then:
+      # Lyrics-now (item 7): current line +-1 for the playing track. 404
+      # (no lyrics) clears lyrics_have so the view falls back gracefully.
+      - if:
+          condition:
+            lambda: 'return id(ui_mode) == 2 && id(tonearm_ok) && id(playing);'
+          then:
+            - http_request.get:
+                url: "${tonearm_base}/api/playback/lyrics-now?api_key=${tonearm_key}"
+                capture_response: true
+                max_response_buffer_size: 2kB
+                on_response:
+                  then:
+                    - lambda: |-
+                        if (response->status_code != 200) {
+                          id(lyrics_have) = false;
+                          return;
+                        }
+                        json::parse_json(body, [](JsonObject root) {
+                          id(lyrics_prev) = std::string(root["prev"] | "");
+                          id(lyrics_cur) = std::string(root["cur"] | "");
+                          id(lyrics_next) = std::string(root["next"] | "");
+                          id(lyrics_have) = true;
+                          return true;
+                        });
 
 display:
   - platform: hub75_matrix_display
@@ -404,18 +600,63 @@ display:
       bool offline = (!id(tonearm_ok)) ||
                      ((uint32_t) (millis() - (uint32_t) id(last_good_ms)) > 30000UL);
       auto clock_now = id(sntp_time).now();
-      if (offline && id(ui_mode) == 1 && clock_now.is_valid()) {
-        // Offline clock face — SNTP keeps ticking once synced, even with
-        // Wi-Fi gone. 1-tap toggles between this and the last-track view.
+      int ui = id(ui_mode);
+      // Lyrics view needs data + a playing track; otherwise fall back.
+      if (ui == 2 && (!id(lyrics_have) || !id(playing) || offline)) ui = 0;
+      // — view 1 / offline clock: big 2x HH:MM + day ————————————————
+      if ((ui == 1 || (offline && ui == 2)) && clock_now.is_valid()) {
         char hhmm[6];
         snprintf(hhmm, sizeof(hhmm), "%02d:%02d", clock_now.hour, clock_now.minute);
-        draw(0, 11, std::string(hhmm), Color(245, 245, 245));
+        // 2x-scale digits via the same font table (0-9 + ':').
+        auto draw2x = [&](int x, int y, const std::string &text, Color col) {
+          int cx = (64 - (int) text.size() * 8) / 2;
+          for (char ch : text) {
+            int n = -1;
+            if (ch >= '0' && ch <= '9') n = 26 + ch - '0';
+            else if (ch == ':') n = 36;
+            if (n >= 0) {
+              for (int r = 0; r < 5; r++) for (int c = 0; c < 3; c++)
+                if (F[n] & (0x4000 >> (r * 3 + c)))
+                  for (int dy = 0; dy < 2; dy++) for (int dx = 0; dx < 2; dx++)
+                    it.draw_pixel_at(cx + c*2 + dx, y + r*2 + dy, col);
+            }
+            cx += 8;
+          }
+        };
+        draw2x(0, 9, std::string(hhmm), Color(245, 245, 245));
         static const char *DOW[7] = {"SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"};
         if (clock_now.day_of_week >= 1 && clock_now.day_of_week <= 7)
-          draw(0, 19, std::string(DOW[clock_now.day_of_week - 1]), Color(160, 160, 160));
-        draw(0, 27, "offline", Color(110, 110, 110));
+          draw(0, 24, std::string(DOW[clock_now.day_of_week - 1]), Color(160, 160, 160));
+        if (offline) draw(0, 30, "offline", Color(110, 110, 110));
+        // gesture blip still applies on clock views
+        if (id(feedback_ms) && millis() - id(feedback_ms) < 300)
+          it.filled_rectangle(60, 0, 4, 4, Color::WHITE);
         return;
       }
+      // — view 2: lyrics — whole sentence, word-wrapped (0.4.29) ————————
+      // Current line wraps to up to 4 centered rows (never cut off);
+      // dim prev/next lines only shown when the current line fits one row.
+      if (ui == 2) {
+        std::vector<std::string> rows = lyrics_wrap(id(lyrics_cur));
+        if (rows.size() <= 1) {
+          draw(0, 2, id(lyrics_prev), Color(110, 110, 110));
+          draw(0, 12, rows.empty() ? "" : rows[0], Color(245, 245, 245));
+          draw(0, 22, id(lyrics_next), Color(110, 110, 110));
+        } else {
+          static const int Y4[4] = {2, 10, 18, 26};
+          static const int Y3[3] = {4, 13, 22};
+          static const int Y2[2] = {7, 17};
+          const int *ys = (rows.size() >= 4) ? Y4
+                        : (rows.size() == 3) ? Y3 : Y2;
+          for (size_t i = 0; i < rows.size(); i++)
+            draw(0, ys[i], rows[i], Color(245, 245, 245));
+        }
+        it.rectangle(4, 31, 56, 1, Color(80, 80, 80));
+        if (id(feedback_ms) && millis() - id(feedback_ms) < 300)
+          it.filled_rectangle(60, 0, 4, 4, Color::WHITE);
+        return;
+      }
+      // — view 0: now playing (backdrop, title/artist, bar) ——————————
       // Full-panel backdrop: blurred + dimmed art (RGB565 from server).
       if (bd_have) {
         for (int py = 0; py < 32; py++)
@@ -431,21 +672,25 @@ display:
       draw(0, 8, id(title_state), Color(245, 245, 245));
       draw(0, 17, id(artist_state), Color(200, 200, 200));
       // Dynamic time/progress/status area. Interpolate smoothly between 5s
-      // server polls, then lag the bar by audio_offset_ms so it matches the
-      // device's delayed playback.
+      // server polls, then lag the bar by the calibrated audio offset so it
+      // matches the device's delayed playback (item 1: calibrated, with the
+      // substitution as boot fallback).
       int shown_elapsed = id(elapsed_base_ms);
       if (id(playing)) {
         shown_elapsed += (int) (millis() - id(elapsed_base_at));
       }
       if (id(duration_ms) > 0 && shown_elapsed > id(duration_ms))
         shown_elapsed = id(duration_ms);
-      shown_elapsed -= ${audio_offset_ms};
+      shown_elapsed -= id(offset_calibrated_ms);
       if (shown_elapsed < 0) shown_elapsed = 0;
       float frac = id(duration_ms) > 0 ? (float)shown_elapsed / id(duration_ms) : 0;
       it.rectangle(4, 27, 56, 3, Color(80,80,80));
       if (frac > 0) it.filled_rectangle(4, 27, (int)(frac * 56), 3, Color::WHITE);
       if (id(playing)) it.filled_rectangle(30, 31, 4, 1, Color::WHITE);
       if (offline) draw(0, 22, "offline", Color(110, 110, 110));
+      // gesture feedback blip (item 3): corner dot for 300ms after any gesture
+      if (id(feedback_ms) && millis() - id(feedback_ms) < 300)
+        it.filled_rectangle(60, 0, 4, 4, Color::WHITE);
 
 # ── the touch pad: the whole remote ────────────────────────────────────
 esp32_touch:
@@ -460,11 +705,14 @@ binary_sensor:
     filters:
       - delayed_on: 10ms
     on_multi_click:
-      # — 1 tap: play/pause (online) | cycle offline view (offline) ———
+      # — 1 tap: play/pause (online) | cycle view (offline) ————————————
       - timing:
           - ON for at most 0.35s
           - OFF for at least 0.45s        # window closes: it was ONE tap
         then:
+          - globals.set:
+              id: feedback_ms
+              value: !lambda 'return (int) millis();'
           - if:
               condition:
                 wifi.connected:
@@ -472,8 +720,8 @@ binary_sensor:
                 - http_request.post:
                     url: "${tonearm_base}/api/playback/toggle?api_key=${tonearm_key}"
               else:
-                # No server: tap still does something local — swap between
-                # the last-track view and the offline clock.
+                # No server: tap still does something local — cycle the
+                # offline views (now-playing -> big clock -> back).
                 - globals.set:
                     id: ui_mode
                     value: !lambda 'return (id(ui_mode) + 1) % 2;'
@@ -484,6 +732,9 @@ binary_sensor:
           - ON for at most 0.35s
           - OFF for at least 0.45s
         then:
+          - globals.set:
+              id: feedback_ms
+              value: !lambda 'return (int) millis();'
           - if:
               condition:
                 wifi.connected:
@@ -499,6 +750,9 @@ binary_sensor:
           - ON for at most 0.35s
           - OFF for at least 0.45s
         then:
+          - globals.set:
+              id: feedback_ms
+              value: !lambda 'return (int) millis();'
           - if:
               condition:
                 wifi.connected:
@@ -511,6 +765,9 @@ binary_sensor:
           - ON for 0.8s to 2.5s
           - OFF for at least 0.4s
         then:
+          - globals.set:
+              id: feedback_ms
+              value: !lambda 'return (int) millis();'
           - if:
               condition:
                 wifi.connected:
@@ -521,6 +778,9 @@ binary_sensor:
                     url: "${tonearm_base}/api/playback/play-collection?kind=playlist&id=${playlist_1_id}&api_key=${tonearm_key}"
               else:
                 # 255 → 96 → 160 → 255 …
+                - globals.set:
+                    id: last_manual_brightness_ms
+                    value: !lambda 'return (int) millis();'
                 - number.set:
                     id: matrix_brightness
                     value: !lambda |-
@@ -528,6 +788,23 @@ binary_sensor:
                       if (cur > 200) return 96;
                       if (cur > 120) return 255;
                       return 160;
+      # — 5s hold: lyrics <-> now playing (online view switch) ——————————
+      #   Long press, no release-window gimmicks: toggles view 0 <-> 2.
+      #   Offline the long press is a no-op (views still cycle via 1 tap).
+      - timing:
+          - ON for at least 5s
+          - OFF for at least 0.4s
+        then:
+          - globals.set:
+              id: feedback_ms
+              value: !lambda 'return (int) millis();'
+          - if:
+              condition:
+                wifi.connected:
+              then:
+                - globals.set:
+                    id: ui_mode
+                    value: !lambda 'return (id(ui_mode) == 2) ? 0 : 2;'
       # — hold, release, hold again: HEAVY ROTATION, shuffled ————
       - timing:
           - ON for 0.8s to 2.5s
@@ -535,6 +812,9 @@ binary_sensor:
           - ON for 0.8s to 2.5s
           - OFF for at least 0.4s
         then:
+          - globals.set:
+              id: feedback_ms
+              value: !lambda 'return (int) millis();'
           - if:
               condition:
                 wifi.connected:

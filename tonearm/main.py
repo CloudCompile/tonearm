@@ -443,7 +443,7 @@ def tidbyt_page():
                         media_type="text/html")
 
 
-@app.get("/tidbyt/status", include_in_schema=False)
+@app.get("/tidbyt-status", include_in_schema=False)
 def tidbyt_status_page():
     return FileResponse(os.path.join(_SITES, "tidbyt-status.html"),
                         media_type="text/html")

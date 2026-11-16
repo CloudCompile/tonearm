@@ -7,6 +7,7 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
 from .. import musickit as mk
 from ..browser import BrowserError
+from ..routes.catalog import _parse_ttml as _parse_ttml_public
 from ..models import (NowPlaying, Ok, OkPlaylist, OkRating, OkRepeat,
                       OkShuffle, OkStatus, OkVolume, PlaybackSettings, Queue,
                       QueueItem, QueueReorder, VolumeState)
@@ -98,6 +99,51 @@ def artwork_raw(size: int = 32, mode: str = "split"):
         raise
     except Exception as e:
         raise HTTPException(502, f"artwork raw unavailable: {e}")
+
+
+@router.get("/lyrics-now", include_in_schema=False)
+def lyrics_now():
+    """The current line +-1 of synced lyrics for the playing track, aligned
+    to the live playhead. Built for the Tidbyt lyrics view: the device polls
+    this every 5s and renders three short lines. 404 when idle/no track/no
+    lyrics — the device treats that as 'no lyrics view'."""
+    try:
+        now = mk.now_playing()
+        song_id = now.get("id") or ""
+        if not now.get("isPlaying") or not song_id:
+            raise HTTPException(404, "nothing playing")
+        elapsed = int(now.get("elapsedMs") or 0)
+        try:
+            data = mk.api_music(
+                f"/v1/catalog/us/songs/{song_id}/lyrics")
+            attrs = (data.get("data") or [{}])[0].get("attributes", {})
+            ttml = attrs.get("ttml")
+        except BrowserError as e:
+            if "404" in str(e):
+                raise HTTPException(404, "no lyrics for this song")
+            raise HTTPException(502, str(e))
+        if not ttml:
+            raise HTTPException(404, "no lyrics for this song")
+        lines = _parse_ttml_public(ttml)
+        if not lines:
+            raise HTTPException(404, "no lyrics for this song")
+        cur_i = 0
+        for i, line in enumerate(lines):
+            if int(line["timeMs"]) <= elapsed:
+                cur_i = i
+            else:
+                break
+        return {
+            "song_id": song_id,
+            "elapsedMs": elapsed,
+            "prev": lines[cur_i - 1]["text"] if cur_i > 0 else "",
+            "cur": lines[cur_i]["text"],
+            "next": lines[cur_i + 1]["text"] if cur_i + 1 < len(lines) else "",
+        }
+    except HTTPException:
+        raise
+    except BrowserError as e:
+        raise HTTPException(502, str(e))
 
 
 @router.get("/artwork-background", include_in_schema=False)
