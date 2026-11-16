@@ -13,7 +13,7 @@ function rowHtml(item) {
                 (item.type || "").replace(/^library-/, "");
   const art = item.artwork
     ? `<img class="thumb" src="${esc(item.artwork)}" alt="" decoding="async">`
-    : `<span class="thumb thumb-empty">♫</span>`;
+    : `<span class="thumb thumb-empty"><svg class="icon"><use href="#i-note"/></svg></span>`;
   return `${art}<div class="t"><b>${esc(item.name)}</b>` +
          `<span>${esc(sub)}</span></div><span class="badge">${esc(badge)}</span>`;
 }

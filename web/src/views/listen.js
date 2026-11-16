@@ -8,7 +8,7 @@ export function initListen() {
   const btn = document.getElementById("listen");
   if (!btn) return;
   get("/api/audio/status").then((s) => {
-    if (s && (s.enabled || s.running || s.sink)) btn.hidden = false;
+    if (s && !s.error) btn.hidden = false;
   }).catch(() => { /* audio off — stays hidden */ });
 
   btn.addEventListener("click", () => {

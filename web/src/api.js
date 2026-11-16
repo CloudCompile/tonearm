@@ -45,3 +45,4 @@ function errWithStatus(message, status) {
 
 export const post = (p, body) => send(p, "POST", body);
 export const put = (p, body) => send(p, "PUT", body);
+export const del = (p) => send(p, "DELETE");
