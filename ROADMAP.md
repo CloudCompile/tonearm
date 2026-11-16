@@ -125,12 +125,12 @@ its own renderer.*
 *Carefully. One Apple session is one stream — by design, not by accident.*
 **Shipped in v0.7.0.**
 
-- [ ] **Multi-key auth with scopes** — `read` keys for friends' UIs, `write`
+- [x] **Multi-key auth with scopes** — `read` keys for friends' UIs, `write`
       keys for yours; per-key rate ceilings `M P0`
       (#46, #114–#119: keys file + hashing, scope enforcement, ceilings,
       key CLI, SSE caps, metrics/tests)
-- [ ] **Per-key audit log** — who did what, exportable `S P1` (#47, #120)
-- [ ] **Session-expiry UX** — `/health` carries `session: ok | expired`
+- [x] **Per-key audit log** — who did what, exportable `S P1` (#47, #120)
+- [x] **Session-expiry UX** — `/health` carries `session: ok | expired`
       (a dead session must say "run `python -m tonearm login`", not
       403 everywhere) `S P1` (#189, found live)
 - [ ] **Multi-account support** — a second Apple profile behind a selector
@@ -145,16 +145,16 @@ its own renderer.*
 *The schema becomes a contract of record, and the docs stop living in a
 chat log. Surface additions land HERE or wait for 1.x.*
 
-- [ ] **API freeze** — deprecation policy (one minor cycle, Sunset
+- [x] **API freeze** — deprecation policy (one minor cycle, Sunset
       header) `S P0` (#50, #126) · Sunset middleware + surface version
       marker `S P1` (#127) · OpenAPI diff gate in CI `M P1` (#128)
-- [ ] **Docs site** — mkdocs on GitHub Pages, endpoint reference generated
+- [x] **Docs site** — mkdocs on GitHub Pages, endpoint reference generated
       from the typed schemas `M P1` (#51, #129–#131: skeleton, generated
       reference + route-coverage check, field notes migrated in)
-- [ ] **CHANGELOG.md + release-notes automation** `S P1` (#138)
-- [ ] **Batch endpoint** — one POST answering N GETs (Ledger today = 5
+- [x] **CHANGELOG.md + release-notes automation** `S P1` (#138)
+- [x] **Batch endpoint** — one POST answering N GETs (Ledger today = 5
       round-trips) `S P2` (#183 — reads only, rides the read cache)
-- [ ] **Multi-storefront** — region as a validated param; the hardcoded
+- [x] **Multi-storefront** — region as a validated param; the hardcoded
       `us` retires `M P2` (#184, verify live with a non-us storefront)
 
 ## v0.9.0 — Install & Harness
