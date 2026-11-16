@@ -63,4 +63,9 @@ if __name__ == "__main__":
         raise SystemExit(0)
     bind_guard()
     uvicorn.run("tonearm.main:app", host=config.host, port=config.port,
-                log_level="info")
+                log_level="info",
+                # a hung client (an SSE tab through the funnel, say) must
+                # never hold shutdown hostage — force-close after 10s
+                # (found live in the rc soak: SIGTERM hung 45s+ in
+                # "Waiting for connections to close" and needed SIGKILL)
+                timeout_graceful_shutdown=10)

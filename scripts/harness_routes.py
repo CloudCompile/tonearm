@@ -12,6 +12,12 @@ import os
 import sys
 import unittest
 
+# running as a file (python3 scripts/harness_routes.py) puts scripts/ on
+# sys.path, not the repo root — bootstrap it so `tests` imports (#208 soak).
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT not in sys.path:
+    sys.path.insert(0, ROOT)
+
 
 def main():
     os.environ.setdefault("TONEARM_MOCK", "1")
