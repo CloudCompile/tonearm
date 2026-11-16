@@ -5,6 +5,7 @@ import sys
 import tempfile
 import unittest
 import unittest.mock
+from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -167,6 +168,47 @@ class TestPartyRoutes(unittest.TestCase):
         host_state = self.client.get(f"/api/party/{created['party_id']}",
             headers={"X-Party-Key": created["party_key"]})
         self.assertEqual(host_state.status_code, 200, host_state.text)
+
+    def test_party_sizes_two_through_ten_participants(self):
+        """Exercise real join/auth/state routes at each requested room size."""
+        host_headers = {"Authorization": "Bearer test-master-key"}
+        for size in range(2, 11):
+            with self.subTest(participants=size):
+                created_response = self.client.post("/api/party",
+                    json={"name": f"Load test {size}"}, headers=host_headers)
+                self.assertEqual(created_response.status_code, 200,
+                                 created_response.text)
+                created = created_response.json()
+                party_id = created["party_id"]
+                keys = [created["party_key"]]  # host is a participant too
+                for n in range(1, size):
+                    joined = self.client.post("/api/party/join", json={
+                        "invite": created["invite"], "name": f"Guest {n}"})
+                    self.assertEqual(joined.status_code, 200,
+                                     f"size={size} guest={n}: {joined.text}")
+                    keys.append(joined.json()["party_key"])
+
+                def read_party(key):
+                    return self.client.get(f"/api/party/{party_id}",
+                        headers={"X-Party-Key": key})
+
+                # Every member can independently fetch the shared party state.
+                for key in keys:
+                    response = read_party(key)
+                    self.assertEqual(response.status_code, 200, response.text)
+                    self.assertEqual(len(response.json()["guests"]), size)
+
+                # Burst concurrent state reads from the largest room to catch
+                # connection/locking errors under party-sized fanout.
+                if size == 10:
+                    with ThreadPoolExecutor(max_workers=16) as pool:
+                        responses = list(pool.map(read_party, keys * 4))
+                    self.assertTrue(all(r.status_code == 200 for r in responses),
+                        [r.text for r in responses if r.status_code != 200])
+
+                closed = self.client.post(f"/api/party/{party_id}/close",
+                                          headers=host_headers)
+                self.assertEqual(closed.status_code, 200, closed.text)
 
 
 if __name__ == "__main__":
