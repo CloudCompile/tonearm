@@ -429,5 +429,33 @@ $("today-date").textContent = new Intl.DateTimeFormat(undefined, { weekday: "lon
 showView("home"); loadHome(); loadPlaylists(); refreshVolume();
 (async () => { try { const s = await get("/api/playback/now-playing"); if (s && !latestState) noteState(s); } catch (e) { if (e.status === 401) $("keyprompt").hidden = false; } })();
 
-// On the browse view a row click plays library songs; cards navigate from home.
+// ---- build-freshness self-heal -------------------------------------------
+// A long-lived tab or an installed PWA window can sit on a stale cached
+// shell for hours (found live: an old window kept the pre-redesign UI while
+// the server was correct). The bundle carries the build stamp it was built
+// with; poll build.json and reload when it differs — no manual clearing.
+const BUILD = typeof __BUILD__ !== "undefined" ? __BUILD__ : "";
+if (BUILD) {
+  const checkBuild = async () => {
+    try {
+      const r = await fetch("/build.json", { cache: "no-store" });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j.built && j.built !== BUILD) location.reload();
+    } catch { /* offline or mid-restart — next tick */ }
+  };
+  setInterval(checkBuild, 60_000);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") checkBuild();
+  });
+  checkBuild();
+}
+
+// ---- service worker: register, and force an update check every load ------
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").then((reg) => {
+    reg.update().catch(() => {});   // never wait for the browser's 24h check
+  }).catch(() => {});
+}
+
 export { navigate };

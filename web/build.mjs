@@ -14,6 +14,12 @@ const ROOT = join(HERE, "..");                          // repo root
 const OUT = join(ROOT, "tonearm", "web-dist");
 mkdirSync(OUT, { recursive: true });
 
+// build stamp — written to build.json AND baked into the bundle. The running
+// app polls build.json and reloads when the stamp differs, so a long-lived
+// tab (or a stale service-worker shell) can never pin an old bundle forever.
+// Found live: an hours-old PWA window kept serving the pre-redesign shell.
+const STAMP = new Date().toISOString();
+
 await build({
   entryPoints: [join(HERE, "src", "main.js")],
   bundle: true,
@@ -21,6 +27,7 @@ await build({
   outfile: `${OUT}/app.js`,
   format: "iife",
   target: ["es2020"],
+  define: { __BUILD__: JSON.stringify(STAMP) },
   logLevel: "info",
 });
 
@@ -29,7 +36,5 @@ for (const f of ["index.html", "manifest.webmanifest", "sw.js", "styles.css",
   try { cpSync(join(HERE, f), join(OUT, f)); } catch { /* optional asset */ }
 }
 
-// build stamp — the SW bumps its cache name off this
-writeFileSync(`${OUT}/build.json`,
-  JSON.stringify({ built: new Date().toISOString() }, null, 1));
-console.log("PWA built ->", OUT);
+writeFileSync(`${OUT}/build.json`, JSON.stringify({ built: STAMP }, null, 1));
+console.log("PWA built ->", OUT, `(build ${STAMP})`);

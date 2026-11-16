@@ -1,9 +1,12 @@
 /* tonearm service worker (#90) — cache the SHELL, never the API.
-   The shell is precached on install and re-fetched stale-while-revalidate;
-   every /api request goes straight to the network (it is live data — an
-   audio stream or a playhead snapshot served from cache is a lie). */
-const CACHE = "tonearm-shell-v4";
-const SHELL = ["/", "/app.js?v=3", "/styles.css?v=3", "/manifest.webmanifest?v=3"];
+   Network-first for NAVIGATIONS (a stale shell must never pin an old app —
+   found live: an hours-old cached index served the pre-redesign UI through
+   a funnel while the server was correct). Cache-first only for other
+   same-origin GETs, which are versioned via ?v=N URLs anyway.
+   Every /api request goes straight to the network (live data — a cached
+   playhead or audio stream would be a lie). */
+const CACHE = "tonearm-shell-v5";
+const SHELL = ["/", "/app.js?v=4", "/styles.css?v=4", "/manifest.webmanifest?v=4"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE)
@@ -25,7 +28,25 @@ self.addEventListener("fetch", (e) => {
   }
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
 
-  // shell: cache-first, refresh in the background
+  // navigations: the network is the truth; the cache is only an offline
+  // fallback. This is what stops an old shell from surviving a deploy.
+  if (e.request.mode === "navigate") {
+    e.respondWith((async () => {
+      try {
+        const fresh = await fetch(e.request);
+        if (fresh.ok) {
+          const c = await caches.open(CACHE);
+          c.put("/", fresh.clone());
+        }
+        return fresh;
+      } catch {
+        return (await caches.match("/")) || Response.error();
+      }
+    })());
+    return;
+  }
+
+  // other shell assets: cache-first, refresh in the background
   e.respondWith(caches.open(CACHE).then(async (c) => {
     const hit = await c.match(e.request);
     const net = fetch(e.request).then((r) => {

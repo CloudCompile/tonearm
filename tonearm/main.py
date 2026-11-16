@@ -347,7 +347,7 @@ async def deprecation_guard(request: Request, call_next):
     # and renders a broken half-app (found live: the redesigned PWA loaded
     # stale through the funnel until a second hard reload). no-cache = the
     # browser may cache, but MUST revalidate against the etag each time.
-    if path in ("/", "/index.html", "/sw.js"):
+    if path in ("/", "/index.html", "/sw.js", "/build.json"):
         response.headers.setdefault("Cache-Control", "no-cache")
     if path.startswith("/api/") or path == "/health":
         try:
