@@ -352,8 +352,7 @@ app.include_router(smartlists_routes.router, prefix="/api")
 app.include_router(watcher_routes.router, prefix="/api")
 app.include_router(audit_routes.router, prefix="/api")
 from .serial_bridge import router as serial_bridge_router
-app.include_router(serial_bridge_router, prefix="/api")
-app.include_router(serial_bridge_router)  # /serial-ws + /serial live at the root
+app.include_router(serial_bridge_router)  # /serial-ws + /api/device/serial/* (paths include /api)
 app.include_router(batch_routes.router, prefix="/api")
 app.include_router(device_routes.router, prefix="/api")
 
