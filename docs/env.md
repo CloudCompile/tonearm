@@ -42,5 +42,9 @@ variable (or a compose env file).
 | `TONEARM_WATCHER_INTERVAL` | `86400` | seconds between watcher passes (daily) |
 | `TONEARM_WATCHER_MAX_ARTISTS` | `100` | catalog lookups per pass (mappings cached; later passes rotate) |
 | `TONEARM_WATCHER_PLAYLIST` | *(unset)* | auto-add a found release's tracks to this playlist (needs `TONEARM_ENABLE_WRITES=1` too) |
+| `TONEARM_PARTY` | `0` | invite-only listening party queue; requires `TONEARM_STORE=1`; guests use separate keys limited to catalog search, suggestions, votes, and live party audio |
 | `TONEARM_SMARTLIST_INTERVAL` | `0` | seconds between smart-playlist re-evaluate + sync sweeps (`0` = manual refresh only; needs `TONEARM_STORE=1`) |
 | `TONEARM_SMARTLIST_MIN_REFRESH` | `300` | floor on a single list's materialization cadence (a full-list PUT rebuilds it) |
+|  |  | **Party API:** With `TONEARM_PARTY=1` and `TONEARM_STORE=1`, a host creates an invite via `POST /api/party`; guests join at `/party/join?invite=…`, search catalog songs, suggest and vote, and can listen to the host's live stream. Guest keys are party-only. Host API write authentication is required to moderate, rotate invites, and close a party. |
+
+Party setup requires both `TONEARM_STORE=1` and `TONEARM_PARTY=1`. Start with `/party`; host creates an invite using a write-capable API key. Guests join with invite URL, then use party-only credentials for song search, suggestions, and voting. Host stream audio is available through the same party page. Invite rotation revokes all current guest tokens; parties cap at 20 guests, 100 queued songs, 10 votes per guest, and one guest write every 2 seconds. The steerer checks the host's queue before inserting the vote leader near the end of a track; it won't interrupt or jump an already populated queue.

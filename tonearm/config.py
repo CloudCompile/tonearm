@@ -195,6 +195,9 @@ class Config:
     # you opt in. The db holds listening history + library snapshots on YOUR
     # volume; nothing leaves the machine.
     store_enabled: bool = os.environ.get("TONEARM_STORE", "0") == "1"
+    # Invite-only party queue; requires the store and uses separate guest
+    # credentials that never grant access to the rest of the API.
+    party_enabled: bool = os.environ.get("TONEARM_PARTY", "0") == "1"
     # How often (seconds) the background library snapshot walk runs. The walk
     # is ~1 eval/page of ~100 songs — slow cadence by design, skipped while
     # the watchdog reports a renderer stall.

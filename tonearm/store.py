@@ -38,6 +38,7 @@ and not added; removed = last_seen <= since. One table, no snapshot forks.
 import json
 import logging
 import os
+import secrets
 import sqlite3
 import threading
 import time
@@ -47,7 +48,7 @@ from .metrics import METRICS
 
 log = logging.getLogger("tonearm.store")
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _MIGRATIONS = {
     1: """
@@ -115,6 +116,45 @@ _MIGRATIONS = {
         status INTEGER NOT NULL);
     CREATE INDEX IF NOT EXISTS idx_audit_ts ON audit(ts);
     """,
+    # v1.0 party mode: isolated invite/guest credentials, suggestions and
+    # votes. Only hashes of invite and guest secrets are persisted.
+    4: """
+    CREATE TABLE IF NOT EXISTS parties (
+        id TEXT PRIMARY KEY,
+        invite_hash TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        state TEXT NOT NULL DEFAULT 'open',
+        current_track_id TEXT,
+        created_at REAL NOT NULL,
+        updated_at REAL NOT NULL,
+        host_key_id TEXT NOT NULL DEFAULT 'anonymous');
+    CREATE TABLE IF NOT EXISTS party_guests (
+        id TEXT PRIMARY KEY,
+        party_id TEXT NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+        token_hash TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        joined_at REAL NOT NULL,
+        last_action REAL NOT NULL DEFAULT 0,
+        active INTEGER NOT NULL DEFAULT 1);
+    CREATE TABLE IF NOT EXISTS party_suggestions (
+        id TEXT PRIMARY KEY,
+        party_id TEXT NOT NULL REFERENCES parties(id) ON DELETE CASCADE,
+        guest_id TEXT NOT NULL REFERENCES party_guests(id),
+        catalog_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        artist TEXT,
+        artwork TEXT,
+        state TEXT NOT NULL DEFAULT 'queued',
+        created_at REAL NOT NULL,
+        played_at REAL);
+    CREATE TABLE IF NOT EXISTS party_votes (
+        suggestion_id TEXT NOT NULL REFERENCES party_suggestions(id) ON DELETE CASCADE,
+        guest_id TEXT NOT NULL REFERENCES party_guests(id) ON DELETE CASCADE,
+        created_at REAL NOT NULL,
+        PRIMARY KEY(suggestion_id, guest_id));
+    CREATE INDEX IF NOT EXISTS idx_party_suggestions ON party_suggestions(
+        party_id, state, created_at);
+    """,
 }
 
 
@@ -149,6 +189,7 @@ class Store:
             self._conn.execute("PRAGMA journal_mode=WAL")
             self._conn.execute("PRAGMA busy_timeout=10000")
             self._conn.execute("PRAGMA synchronous=NORMAL")
+            self._conn.execute("PRAGMA foreign_keys=ON")
             self._migrate()
         log.info("store open at %s", self.path)
 
@@ -575,6 +616,295 @@ class Store:
         except (json.JSONDecodeError, TypeError):
             return default
 
+    # --------------------------------------------------------------- parties
+
+    @staticmethod
+    def _party_row(row):
+        if not row:
+            return None
+        return {"id": row[0], "name": row[1], "state": row[2],
+                "current_track_id": row[3], "created_at": row[4],
+                "updated_at": row[5], "host_key_id": row[6]}
+
+    def party_create(self, party_id, invite_hash, name, host_key_id="anonymous"):
+        conn = self._require_conn()
+        now = time.time()
+        with self._lock:
+            if conn.execute("SELECT 1 FROM parties WHERE state='open' LIMIT 1").fetchone():
+                raise ValueError("a party is already open")
+            conn.execute("INSERT INTO parties(id, invite_hash, name, created_at, "
+                         "updated_at,host_key_id) VALUES(?,?,?,?,?,?)",
+                         (party_id, invite_hash, name, now, now, host_key_id))
+            conn.commit()
+        return self.party_get(party_id)
+
+    def party_get(self, party_id):
+        conn = self._require_conn()
+        with self._lock:
+            row = conn.execute("SELECT id,name,state,current_track_id,created_at,"
+                               "updated_at,host_key_id FROM parties WHERE id=?",
+                               (party_id,)).fetchone()
+        return self._party_row(row)
+
+    def party_by_invite(self, invite_hash):
+        conn = self._require_conn()
+        with self._lock:
+            row = conn.execute("SELECT id FROM parties WHERE invite_hash=? "
+                               "AND state='open'", (invite_hash,)).fetchone()
+        return self.party_get(row[0]) if row else None
+
+    def party_rotate_invite(self, party_id, invite_hash):
+        conn = self._require_conn()
+        with self._lock:
+            cur = conn.execute("UPDATE parties SET invite_hash=?,updated_at=? "
+                               "WHERE id=? AND state='open'",
+                               (invite_hash, time.time(), party_id))
+            conn.commit()
+            return cur.rowcount > 0
+
+    def party_rotate_guest_keys(self, party_id):
+        """Invite rotation invalidates every previously issued guest key."""
+        conn = self._require_conn()
+        with self._lock:
+            conn.execute("UPDATE party_guests SET active=0 WHERE party_id=? "
+                         "AND name!='Host'", (party_id,))
+            conn.execute("DELETE FROM party_votes WHERE suggestion_id IN "
+                         "(SELECT id FROM party_suggestions WHERE party_id=? "
+                         "AND state='queued')", (party_id,))
+            conn.execute("UPDATE party_suggestions SET state='removed' WHERE "
+                         "party_id=? AND state='queued'", (party_id,))
+            conn.commit()
+
+    def party_host_guest_id(self, party_id):
+        conn = self._require_conn()
+        with self._lock:
+            row = conn.execute("SELECT id FROM party_guests WHERE party_id=? "
+                "AND name='Host' AND active=1 ORDER BY joined_at LIMIT 1",
+                (party_id,)).fetchone()
+        return row[0] if row else None
+
+    def party_join(self, party_id, guest_id, token_hash, name):
+        conn = self._require_conn()
+        now = time.time()
+        with self._lock:
+            party = conn.execute("SELECT 1 FROM parties WHERE id=? AND state='open'",
+                                 (party_id,)).fetchone()
+            if not party:
+                return False
+            count = conn.execute("SELECT COUNT(*) FROM party_guests WHERE "
+                                 "party_id=? AND active=1", (party_id,)).fetchone()[0]
+            if count >= 21:  # one host plus at most twenty guests
+                return False
+            if name == "Host" and count >= 1:
+                return False
+            conn.execute("INSERT INTO party_guests(id,party_id,token_hash,name,"
+                         "joined_at) VALUES(?,?,?,?,?)",
+                         (guest_id, party_id, token_hash, name, now))
+            conn.commit()
+        return True
+
+    def party_guest_by_token(self, token_hash):
+        conn = self._require_conn()
+        with self._lock:
+            row = conn.execute("SELECT g.id,g.name,g.party_id,p.name "
+                "FROM party_guests g JOIN parties p ON p.id=g.party_id "
+                "WHERE g.token_hash=? AND g.active=1 AND p.state='open'",
+                (token_hash,)).fetchone()
+        return ({"id": row[0], "name": row[1], "party_id": row[2],
+                 "party_name": row[3]} if row else None)
+
+    def party_guest_for_party(self, party_id, token_hash):
+        guest = self.party_guest_by_token(token_hash)
+        return guest if guest and guest["party_id"] == party_id else None
+
+    def party_guest_action(self, guest_id, cooldown_s=2):
+        """Atomic per-guest cooldown for votes/suggestions; False means 429."""
+        conn = self._require_conn()
+        now = time.time()
+        with self._lock:
+            row = conn.execute("SELECT last_action FROM party_guests WHERE id=? "
+                               "AND active=1", (guest_id,)).fetchone()
+            if not row or now - row[0] < cooldown_s:
+                return False
+            conn.execute("UPDATE party_guests SET last_action=? WHERE id=?",
+                         (now, guest_id))
+            conn.commit()
+            return True
+
+    def party_guest_revoke(self, party_id, guest_id):
+        conn = self._require_conn()
+        with self._lock:
+            cur = conn.execute("UPDATE party_guests SET active=0 WHERE id=? "
+                               "AND party_id=? AND active=1",
+                               (guest_id, party_id))
+            if cur.rowcount:
+                conn.execute("DELETE FROM party_votes WHERE guest_id=?", (guest_id,))
+            conn.commit()
+            return cur.rowcount > 0
+
+    def party_suggest(self, party_id, guest_id, catalog_id, title, artist, artwork):
+        conn = self._require_conn()
+        sid = "ps_" + secrets.token_urlsafe(9)
+        now = time.time()
+        with self._lock:
+            party = conn.execute("SELECT state FROM parties WHERE id=?",
+                                 (party_id,)).fetchone()
+            if not party or party[0] != "open":
+                return None
+            guest = conn.execute("SELECT active FROM party_guests WHERE id=? "
+                                 "AND party_id=?", (guest_id, party_id)).fetchone()
+            if not guest or not guest[0]:
+                return None
+            existing = conn.execute("SELECT id FROM party_suggestions WHERE "
+                "party_id=? AND catalog_id=? AND state='queued'",
+                (party_id, catalog_id)).fetchone()
+            if existing:
+                return existing[0], False
+            active = conn.execute("SELECT COUNT(*) FROM party_suggestions WHERE "
+                                  "party_id=? AND state IN ('queued','scheduled')",
+                                  (party_id,)).fetchone()[0]
+            if active >= 100:
+                raise ValueError("party queue is full (100 suggestions)")
+            conn.execute("INSERT INTO party_suggestions(id,party_id,guest_id,"
+                         "catalog_id,title,artist,artwork,created_at) "
+                         "VALUES(?,?,?,?,?,?,?,?)",
+                         (sid, party_id, guest_id, catalog_id, title, artist,
+                          artwork, now))
+            conn.execute("INSERT INTO party_votes VALUES(?,?,?)",
+                         (sid, guest_id, now))
+            conn.commit()
+        return sid, True
+
+    def party_guest_vote_count(self, party_id, guest_id):
+        conn = self._require_conn()
+        with self._lock:
+            row = conn.execute("SELECT COUNT(*) FROM party_votes v JOIN "
+                "party_suggestions s ON s.id=v.suggestion_id WHERE "
+                "s.party_id=? AND s.state='queued' AND v.guest_id=?",
+                (party_id, guest_id)).fetchone()
+        return row[0]
+
+    def party_vote(self, party_id, suggestion_id, guest_id):
+        conn = self._require_conn()
+        with self._lock:
+            row = conn.execute("SELECT state FROM party_suggestions WHERE id=? "
+                               "AND party_id=?", (suggestion_id, party_id)).fetchone()
+            if not row or row[0] != "queued":
+                return None
+            active = conn.execute("SELECT active FROM party_guests WHERE id=? "
+                                  "AND party_id=?", (guest_id, party_id)).fetchone()
+            if not active or not active[0]:
+                return None
+            cur = conn.execute("INSERT OR IGNORE INTO party_votes VALUES(?,?,?)",
+                               (suggestion_id, guest_id, time.time()))
+            conn.commit()
+            return cur.rowcount > 0
+
+    def party_unvote(self, party_id, suggestion_id, guest_id):
+        conn = self._require_conn()
+        with self._lock:
+            cur = conn.execute("DELETE FROM party_votes WHERE suggestion_id=? "
+                               "AND guest_id=? AND suggestion_id IN "
+                               "(SELECT id FROM party_suggestions WHERE "
+                               "party_id=? AND state='queued')",
+                               (suggestion_id, guest_id, party_id))
+            conn.commit()
+            return cur.rowcount > 0
+
+    def party_public_state(self, party_id, guest_id):
+        conn = self._require_conn()
+        with self._lock:
+            rows = conn.execute("SELECT s.id,s.catalog_id,s.title,s.artist,"
+                "s.artwork,s.state,s.created_at,g.name,COUNT(v.guest_id),"
+                "MAX(CASE WHEN v.guest_id=? THEN 1 ELSE 0 END) "
+                "FROM party_suggestions s JOIN party_guests g ON g.id=s.guest_id "
+                "LEFT JOIN party_votes v ON v.suggestion_id=s.id "
+                "WHERE s.party_id=? GROUP BY s.id ORDER BY "
+                "CASE s.state WHEN 'queued' THEN 0 ELSE 1 END, COUNT(v.guest_id) "
+                "DESC,s.created_at", (guest_id, party_id)).fetchall()
+            party = conn.execute("SELECT id,name,state,current_track_id FROM parties "
+                                 "WHERE id=?", (party_id,)).fetchone()
+            guests = conn.execute("SELECT id,name FROM party_guests WHERE "
+                                  "party_id=? AND active=1 ORDER BY joined_at",
+                                  (party_id,)).fetchall()
+        if not party:
+            return None
+        return {"id": party[0], "name": party[1], "state": party[2],
+                "current_track_id": party[3],
+                "suggestions": [{"id": r[0], "catalog_id": r[1],
+                    "title": r[2], "artist": r[3], "artwork": r[4],
+                    "state": r[5], "created_at": r[6], "suggested_by": r[7],
+                    "votes": r[8], "voted": bool(r[9])} for r in rows],
+                "guests": [{"id": r[0], "name": r[1]} for r in guests]}
+
+    def party_active(self):
+        conn = self._require_conn()
+        with self._lock:
+            row = conn.execute("SELECT id FROM parties WHERE state='open' "
+                               "ORDER BY created_at DESC LIMIT 1").fetchone()
+        return self.party_get(row[0]) if row else None
+
+    def party_schedule_next(self, party_id):
+        conn = self._require_conn()
+        with self._lock:
+            scheduled = conn.execute("SELECT catalog_id FROM party_suggestions "
+                "WHERE party_id=? AND state='scheduled' LIMIT 1",
+                (party_id,)).fetchone()
+            if scheduled:
+                return None
+            winner = conn.execute("SELECT s.id,s.catalog_id FROM "
+                "party_suggestions s LEFT JOIN party_votes v "
+                "ON v.suggestion_id=s.id WHERE s.party_id=? AND s.state='queued' "
+                "GROUP BY s.id ORDER BY COUNT(v.guest_id) DESC,s.created_at "
+                "ASC LIMIT 1", (party_id,)).fetchone()
+            if not winner:
+                return None
+            conn.execute("UPDATE party_suggestions SET state='scheduled' "
+                         "WHERE id=?", (winner[0],))
+            conn.commit()
+            return {"suggestion_id": winner[0], "catalog_id": winner[1]}
+
+    def party_unschedule(self, suggestion_id):
+        conn = self._require_conn()
+        with self._lock:
+            conn.execute("UPDATE party_suggestions SET state='queued' "
+                         "WHERE id=? AND state='scheduled'", (suggestion_id,))
+            conn.commit()
+
+    def party_track_changed(self, party_id, track_id):
+        conn = self._require_conn()
+        with self._lock:
+            scheduled = conn.execute("SELECT id,catalog_id FROM party_suggestions "
+                "WHERE party_id=? AND state='scheduled' LIMIT 1",
+                (party_id,)).fetchone()
+            if scheduled and scheduled[1] == track_id:
+                conn.execute("UPDATE party_suggestions SET state='played',played_at=? "
+                             "WHERE id=?", (time.time(), scheduled[0]))
+            elif scheduled:
+                # Host changed tracks before the party's scheduled item began.
+                conn.execute("UPDATE party_suggestions SET state='queued' "
+                             "WHERE id=?", (scheduled[0],))
+            conn.execute("UPDATE parties SET current_track_id=?,updated_at=? "
+                         "WHERE id=?", (track_id, time.time(), party_id))
+            conn.commit()
+
+    def party_remove_suggestion(self, party_id, suggestion_id):
+        conn = self._require_conn()
+        with self._lock:
+            cur = conn.execute("UPDATE party_suggestions SET state='removed' "
+                "WHERE id=? AND party_id=? AND state='queued'",
+                (suggestion_id, party_id))
+            conn.commit()
+            return cur.rowcount > 0
+
+    def party_close(self, party_id):
+        conn = self._require_conn()
+        with self._lock:
+            cur = conn.execute("UPDATE parties SET state='closed',updated_at=? "
+                               "WHERE id=? AND state='open'",
+                               (time.time(), party_id))
+            conn.commit()
+            return cur.rowcount > 0
 
 class StoreDisabled(RuntimeError):
     """Raised by store read methods when the store is off; routes map it to

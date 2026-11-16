@@ -383,6 +383,94 @@ Now Playing Txt
 |---|---|---|---|
 | `format` | query | no |  |
 
+### `POST /api/party`
+
+Create
+
+Takes a JSON body (see schema in `/docs`).
+
+### `GET /api/party/active`
+
+Active
+
+### `POST /api/party/join`
+
+Join
+
+Takes a JSON body (see schema in `/docs`).
+
+### `GET /api/party/{party_id}`
+
+State
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `party_id` | path | yes |  |
+
+### `POST /api/party/{party_id}/close`
+
+Close
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `party_id` | path | yes |  |
+
+### `DELETE /api/party/{party_id}/guests/{guest_id}`
+
+Revoke Guest
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `party_id` | path | yes |  |
+| `guest_id` | path | yes |  |
+
+### `POST /api/party/{party_id}/rotate-invite`
+
+Rotate Invite
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `party_id` | path | yes |  |
+
+### `GET /api/party/{party_id}/search`
+
+Search
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `party_id` | path | yes |  |
+| `term` | query | yes |  |
+
+### `POST /api/party/{party_id}/suggest`
+
+Suggest
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `party_id` | path | yes |  |
+
+Takes a JSON body (see schema in `/docs`).
+
+### `DELETE /api/party/{party_id}/suggestions/{suggestion_id}`
+
+Remove Suggestion
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `party_id` | path | yes |  |
+| `suggestion_id` | path | yes |  |
+
+### `POST /api/party/{party_id}/suggestions/{suggestion_id}/vote`
+
+Vote
+
+| Parameter | In | Required | Description |
+|---|---|---|---|
+| `party_id` | path | yes |  |
+| `suggestion_id` | path | yes |  |
+
+Takes a JSON body (see schema in `/docs`).
+
 ### `GET /api/personal/heavy-rotation`
 
 Heavy Rotation

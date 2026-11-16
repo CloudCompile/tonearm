@@ -356,6 +356,58 @@ class RateReport(_PassThrough):
     hearted_count: int
 
 
+# ---- party mode ----
+
+class PartyCreate(_PassThrough):
+    name: str = "Listening party"
+
+
+class PartyJoin(_PassThrough):
+    invite: str
+    name: str
+
+
+class PartySearch(_PassThrough):
+    items: list[dict]
+
+
+class PartySuggestionCreate(_PassThrough):
+    catalog_id: str
+
+
+class PartyVote(_PassThrough):
+    vote: bool = True
+
+
+class PartyAction(_PassThrough):
+    ok: bool
+    detail: str | None = None
+
+
+class PartyCreateResult(_PassThrough):
+    party_id: str
+    invite: str
+    party_key: str
+    invite_url: str
+    name: str
+
+
+class PartyJoinResult(_PassThrough):
+    party_id: str
+    party_key: str
+    party_url: str
+    name: str
+
+
+class PartyState(_PassThrough):
+    id: str
+    name: str
+    state: str
+    current_track_id: str | None = None
+    suggestions: list[dict]
+    guests: list[dict]
+
+
 # ---- restore ----
 
 class RestorePlanItem(_PassThrough):
