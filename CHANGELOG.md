@@ -61,6 +61,20 @@ catalog goes worldwide.
 ### Added
 - (nothing yet)
 
+## [1.0.0-rc.1] — 2026-11-16 — The Candidate
+
+The freeze candidate: same surface as v0.9.0, pinned and marked 1.0.
+Per the roadmap, rc is **fixes only** — the deprecation registry is
+empty (nothing announced in v0.8 died), so no route or shape changes
+ride this train. From here until 1.0.0 final: bug fixes, docs, and the
+live soak; the [freeze policy](docs/deprecation.md) owns the surface
+after.
+
+### Changed
+- Surface pin `1.0.0-rc.1` — clients see `X-Tonearm-Surface: 1.0` and
+  `/health` `surface: 1.0`, the signal that the contract of record is
+  now the 1.0 train.
+
 ## [0.9.0] — 2026-11-16 — Install & Harness (Tidbyt stable)
 
 Tidbyt Gen 2 support is now stable/released, and the install + offline
@@ -157,7 +171,8 @@ regression story lands for bare metal and CI.
 - Playback control, library/catalog search, favorites, the demo page,
   audio streaming at `/api/audio/stream.mp3`.
 
-[Unreleased]: https://github.com/CloudCompile/tonearm/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/CloudCompile/tonearm/compare/v1.0.0-rc.1...HEAD
+[1.0.0-rc.1]: https://github.com/CloudCompile/tonearm/compare/v0.9.0...v1.0.0-rc.1
 [0.9.0]: https://github.com/CloudCompile/tonearm/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/CloudCompile/tonearm/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/CloudCompile/tonearm/compare/v0.6.2...v0.7.0

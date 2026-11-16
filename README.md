@@ -843,7 +843,8 @@ plan (effort- and priority-tagged, with non-goals stated honestly).
   **v0.7.0** multi-user (scoped keys, audit log) → **v0.8.0** the API
   freeze + docs site (+ batch endpoint, multi-storefront before the
   freeze) → **v0.9.0** install script + offline test harness (+ the
-  tunnel-era deploy docs) — **shipped** → **v1.0.0-rc** soak → **v1.0.0**
+  tunnel-era deploy docs) — **shipped** → **v1.0.0-rc.1** fixes-only
+  candidate, live soak → **v1.0.0** final
 
 ## Deploying
 

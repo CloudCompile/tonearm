@@ -3,7 +3,7 @@
      if any route is missing from this page. -->
 # API reference
 
-**tonearm** — surface `0.9.0`. Every route below is from the
+**tonearm** — surface `1.0.0-rc.1`. Every route below is from the
 OpenAPI contract of record; auth (Bearer key or `?api_key=`) applies to
 all `/api/` routes. Try it live at `/docs` on your own server.
 

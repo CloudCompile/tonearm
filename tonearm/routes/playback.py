@@ -296,20 +296,3 @@ def command(command: str):
         return {"ok": True}
     except BrowserError as e:
         raise HTTPException(502, str(e))
-
-
-@router.post("/back", response_model=Ok)
-def back(threshold_ms: int = 10000):
-    """Hardware-button 'back' (the Tidbyt's triple-tap): past the
-    threshold (default 10s), 'back' means RESTART this song; before it,
-    previous track. Additive route, not a change to /previous — the
-    freeze's allowlist is additions only."""
-    if not 0 <= threshold_ms <= 600000:
-        raise HTTPException(400, "threshold_ms out of range")
-    try:
-        result = mk.playback_back(threshold_ms) or {}
-        if result.get("warn"):
-            raise HTTPException(502, result["warn"])
-        return {"ok": True, **result}
-    except BrowserError as e:
-        raise HTTPException(502, str(e))
