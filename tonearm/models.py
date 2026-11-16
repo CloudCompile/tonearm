@@ -408,6 +408,15 @@ class PartyState(_PassThrough):
     guests: list[dict]
 
 
+class LyricsNow(_PassThrough):
+    """GET /api/playback/lyrics-now — the current line +-1 for the device."""
+    song_id: str
+    elapsedMs: int
+    prev: str
+    cur: str
+    next: str
+
+
 # ---- restore ----
 
 class RestorePlanItem(_PassThrough):

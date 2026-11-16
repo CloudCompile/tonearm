@@ -8,7 +8,8 @@ from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 from .. import musickit as mk
 from ..browser import BrowserError
 from ..routes.catalog import _parse_ttml as _parse_ttml_public
-from ..models import (NowPlaying, Ok, OkPlaylist, OkRating, OkRepeat,
+from ..models import (LyricsNow, NowPlaying, Ok, OkPlaylist, OkRating,
+                      OkRepeat,
                       OkShuffle, OkStatus, OkVolume, PlaybackSettings, Queue,
                       QueueItem, QueueReorder, VolumeState)
 
@@ -101,7 +102,7 @@ def artwork_raw(size: int = 32, mode: str = "split"):
         raise HTTPException(502, f"artwork raw unavailable: {e}")
 
 
-@router.get("/lyrics-now", include_in_schema=False)
+@router.get("/lyrics-now", response_model=LyricsNow, include_in_schema=False)
 def lyrics_now():
     """The current line +-1 of synced lyrics for the playing track, aligned
     to the live playhead. Built for the Tidbyt lyrics view: the device polls

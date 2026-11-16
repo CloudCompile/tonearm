@@ -103,7 +103,8 @@ jobs:
                              "/demo", "/api/amp-api/", "/api/overlay/",
                              "/openapi.json", "/docs", "/redoc",
                              "/ledger", "/radar", "/bench", "/tidbyt",
-                             "/sites/", "/serial", "/api/device/serial/")
+                             "/sites/", "/serial", "/api/device/serial/",
+                             "/party", "/api/party/")
 
           untyped = []
           total = 0
