@@ -7858,7 +7858,7 @@
   },
   "/api/write/playlists": {
    "post": {
-    "description": "Create a library playlist. Returns the new playlist id.",
+    "description": "Create a library playlist. Returns the new playlist id.\n\nSLOW ON PURPOSE: this drives Apple's UI automation and can take up\nto ~2 minutes to return. Set client timeouts ABOVE that \u2014 a timed-out\nclient cannot see the id of a playlist the server goes on to create\n(orphaned-until-you-look-it-up-in-audit; found live in the rc soak).\nThe creation is also audited (`/api/audit`), so a lost id is always\nrecoverable there.",
     "operationId": "create_playlist_api_write_playlists_post",
     "parameters": [
      {
@@ -8174,7 +8174,7 @@
     ]
    },
    "put": {
-    "description": "rating: 'like' or 'none'.",
+    "description": "rating: 'like' or 'none' (query param `rating`, NOT `value` \u2014\nfavorites uses `value`, this route never did; found live in the\nrc soak where a `?value=` caller got a hint that blamed the\nrating words instead of the param name).",
     "operationId": "rate_song_api_write_ratings_songs__song_id__put",
     "parameters": [
      {
