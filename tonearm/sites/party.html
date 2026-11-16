@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>tonearm party</title>
+<style>
+body{font:16px system-ui;background:#111;color:#eee;max-width:760px;margin:30px auto;padding:0 16px}
+input,button{font:inherit;padding:10px;border-radius:8px;border:1px solid #444;background:#222;color:#eee}
+button{cursor:pointer;background:#563cc9;border:0}.row{display:flex;gap:8px;margin:8px 0}.row input{flex:1}
+.card{padding:12px;margin:8px 0;background:#1c1c22;border-radius:10px;display:flex;gap:12px;align-items:center}
+.card img{width:52px;height:52px;object-fit:cover;border-radius:6px}.muted{color:#aaa}#status{color:#ffcf70}
+</style></head><body>
+<h1>🎶 Listening party</h1><p id="status" class="muted">Join with an invite, or start a party from tonearm.</p>
+<section id="host"><h2>Host a party</h2><p class="muted">Start a party with your tonearm API key. Guests receive a party-only invite.</p><div class="row"><input id="apikey" type="password" placeholder="Tonearm API key"><input id="partytitle" value="Listening party" aria-label="Party name"></div><button id="start">Start party</button><p id="inviteout"></p></section>
+<section id="join"><div class="row"><input id="invite" placeholder="Invite code"><input id="name" placeholder="Your name"></div><button id="joinbtn">Join party</button></section>
+<section id="party" hidden><h2 id="partyname"></h2><p id="guests" class="muted"></p><button id="close" hidden>End party</button><button id="rotate" hidden>Rotate invite</button><button id="audio-toggle">Listen</button><p id="hostinvite"></p>
+<div class="row"><input id="term" placeholder="Search songs in Apple Music"><button id="search">Search</button></div><div id="results"></div>
+<h3>Up next — vote to move songs up</h3><div id="queue"></div>
+<audio id="audio" controls style="width:100%;margin-top:12px"></audio></section>
+<script>
+const $=id=>document.getElementById(id);let partyId=localStorage.partyId,partyKey=localStorage.partyKey,hostMode=!!sessionStorage.hostKey;
+function api(path,opts={}){opts.headers={...(opts.headers||{}),'Content-Type':'application/json','X-Party-Key':partyKey||''};return fetch('/api/party/'+path,opts).then(async r=>{let j=await r.json();if(!r.ok)throw Error(j.detail||j.error?.hint||r.statusText);return j})}
+function join(invite,name){return fetch('/api/party/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({invite,name})}).then(async r=>{let j=await r.json();if(!r.ok)throw Error(j.detail||r.statusText);partyId=j.party_id;partyKey=j.party_key;localStorage.partyId=partyId;localStorage.partyKey=partyKey;history.replaceState({},'',j.party_url);showParty()})}
+let refreshTimer=null;function showParty(){ $('join').hidden=true;$('host').hidden=true;$('party').hidden=false;$('audio').src=`/api/party/${partyId}/audio`;if(sessionStorage.hostKey){hostKey=sessionStorage.hostKey;$('close').hidden=false;$('rotate').hidden=false}refresh();if(!refreshTimer)refreshTimer=setInterval(refresh,5000) }
+async function refresh(){try{let d=hostMode?await fetch('/api/party/active',{headers:{Authorization:'Bearer '+hostKey}}).then(async r=>{let x=await r.json();if(!r.ok)throw Error(x.detail||r.statusText);return x}):await api(partyId);$('partyname').textContent=d.name;$('guests').textContent=d.guests.map(g=>g.name).join(' · ');$('queue').innerHTML=d.suggestions.map(s=>`<div class="card"><img src="${(s.artwork||'').replace('{w}','120').replace('{h}','120')}"><div style="flex:1"><b>${esc(s.title)}</b><br><span class="muted">${esc(s.artist||'')} · ${s.votes} votes</span></div>${s.state==='queued'&&!hostMode?`<button onclick="vote('${s.id}')">${s.voted?'✓':'▲'}</button>`:hostMode&&s.state==='queued'?`<button onclick="removeSuggestion('${s.id}')">Remove</button>`:''}</div>`).join('');$('status').textContent='Connected — live from the host’s Apple Music session'}catch(e){$('status').textContent=e.message}}
+async function search(){try{let d=await api(`${partyId}/search?term=${encodeURIComponent($('term').value)}`);$('results').innerHTML=d.items.map(s=>`<div class="card"><img src="${(s.artwork||'').replace('{w}','120').replace('{h}','120')}"><div style="flex:1">${esc(s.title)}<br><span class="muted">${esc(s.artist||'')}</span></div><button onclick="suggest('${s.id}')">Add</button></div>`).join('')}catch(e){$('status').textContent=e.message}}
+async function suggest(id){try{await api(`${partyId}/suggest`,{method:'POST',body:JSON.stringify({catalog_id:id})});refresh()}catch(e){$('status').textContent=e.message}}
+async function vote(id){try{await api(`${partyId}/suggestions/${id}/vote`,{method:'POST',body:'{}'});refresh()}catch(e){$('status').textContent=e.message}}
+async function removeSuggestion(id){try{let r=await fetch(`/api/party/${partyId}/suggestions/${id}`,{method:'DELETE',headers:{Authorization:'Bearer '+hostKey}});if(!r.ok)throw Error('Could not remove suggestion');refresh()}catch(e){$('status').textContent=e.message}}
+function esc(s){return String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+$('joinbtn').onclick=()=>join($('invite').value.trim(),$('name').value.trim()).catch(e=>$('status').textContent=e.message);$('search').onclick=search;
+$('audio-toggle').onclick=()=>{if(!$('audio').src)$('audio').src=`/api/party/${partyId}/audio?party_key=${encodeURIComponent(partyKey||'')}`;$('audio').play().catch(e=>$('status').textContent='Audio could not start: '+e.message)};
+let hostKey=sessionStorage.hostKey||'';$('start').onclick=async()=>{try{hostKey=$('apikey').value.trim();let r=await fetch('/api/party',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+hostKey},body:JSON.stringify({name:$('partytitle').value})});let d=await r.json();if(!r.ok)throw Error(d.detail||d.error?.hint||r.statusText);sessionStorage.hostKey=hostKey;partyId=d.party_id;partyKey=d.party_key;hostMode=true;localStorage.partyId=partyId;localStorage.partyKey=partyKey;$('hostinvite').innerHTML=`Invite: <a href="${esc(d.invite_url)}">${esc(d.invite_url)}</a>`;$('status').textContent='Party started; guests join with the invite.';showParty()}catch(e){$('status').textContent=e.message}};
+$('close').onclick=async()=>{try{let r=await fetch('/api/party/'+partyId+'/close',{method:'POST',headers:{'Authorization':'Bearer '+hostKey}});if(!r.ok)throw Error('Host API key required to end party');localStorage.removeItem('partyId');localStorage.removeItem('partyKey');sessionStorage.removeItem('hostKey');location.reload()}catch(e){$('status').textContent=e.message}};
+$('rotate').onclick=async()=>{try{let r=await fetch('/api/party/'+partyId+'/rotate-invite',{method:'POST',headers:{Authorization:'Bearer '+hostKey}}),d=await r.json();if(!r.ok)throw Error(d.detail||'Could not rotate invite');partyKey=d.party_key;localStorage.partyKey=partyKey;$('hostinvite').innerHTML=`Invite: <a href="${esc(d.invite_url)}">${esc(d.invite_url)}</a>`}catch(e){$('status').textContent=e.message}};
+if(new URLSearchParams(location.search).get('invite'))$('invite').value=new URLSearchParams(location.search).get('invite');if(partyId&&partyKey)showParty();
+</script></body></html>

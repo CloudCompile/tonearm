@@ -24,6 +24,7 @@ from .routes import (library, favorites, playback, passthrough, catalog,
                      watcher as watcher_routes,
                      audit as audit_routes, batch as batch_routes,
                      device as device_routes)
+from .routes import party as party_routes
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -66,6 +67,14 @@ async def lifespan(app):
             _store_mod.snapshot_scheduler = _snap
         except Exception as e:
             log.error("store failed to start (continuing without it): %s", e)
+    if config.party_enabled and config.store_enabled:
+        try:
+            from .routes.party import PartySteerer
+            party_steerer = PartySteerer()
+            party_steerer.start()
+            app.state.party_steerer = party_steerer
+        except Exception as e:
+            log.error("party steerer failed to start: %s", e)
     # scheduled exports (heavy walks — OFF unless TONEARM_EXPORT_INTERVAL>0;
     # independent of the store: its outputs are files on the volume)
     if config.export_interval > 0:
@@ -158,6 +167,12 @@ async def lifespan(app):
             log.error("smartlist scheduler failed to start: %s", e)
     yield
     try:
+        steerer = getattr(app.state, "party_steerer", None)
+        if steerer is not None:
+            steerer.stop()
+    except Exception:
+        pass
+    try:
         from . import digest as _digest_mod
         if getattr(_digest_mod, "scheduler", None) is not None:
             _digest_mod.scheduler.stop()
@@ -244,6 +259,27 @@ async def auth_guard(request: Request, call_next):
     # are accepted everywhere.
     if not (path.startswith("/api/") or path == "/metrics"):
         return await call_next(request)
+    # Party guest credentials are intentionally a different capability from
+    # API keys. Only the guest-specific routes bypass the general write-scope
+    # guard; each route validates X-Party-Key itself before doing any work.
+    parts = path.strip("/").split("/")
+    guest_party_read = (request.method == "GET"
+                        and parts[:2] == ["api", "party"]
+                        and len(parts) >= 3
+                        and parts[2] not in ("active", "join")
+                        and (len(parts) == 3 or parts[3] in ("search", "events"))
+                        and bool(request.headers.get("X-Party-Key")))
+    guest_party_write = (request.method == "POST"
+                         and path.startswith("/api/party/")
+                         and (path.endswith("/suggest") or path.endswith("/vote"))
+                         and bool(request.headers.get("X-Party-Key")))
+    guest_party_audio = (request.method == "GET" and len(parts) == 4
+                         and parts[:2] == ["api", "party"] and parts[3] == "audio"
+                         and bool(request.cookies.get(f"party_audio_{parts[2]}")))
+    if guest_party_read or guest_party_write or guest_party_audio:
+        return await call_next(request)
+    if request.method == "POST" and path == "/api/party/join":
+        return await call_next(request)  # one-time invite is validated by route
     # v0.7 multi-key: no master key AND no keys file = a keyless server,
     # exactly the old behavior. Anything configured resolves to an identity.
     if not config.api_key and not keys_mod.registry.has_keys():
@@ -355,6 +391,15 @@ from .serial_bridge import router as serial_bridge_router
 app.include_router(serial_bridge_router)  # /serial-ws + /api/device/serial/* (paths include /api)
 app.include_router(batch_routes.router, prefix="/api")
 app.include_router(device_routes.router, prefix="/api")
+app.include_router(party_routes.router, prefix="/api")
+
+
+@app.get("/party", include_in_schema=False)
+@app.get("/party/join", include_in_schema=False)
+@app.get("/party/{party_id}", include_in_schema=False)
+def party_page(party_id: str = ""):
+    return FileResponse(os.path.join(os.path.dirname(__file__), "sites",
+                                     "party.html"), media_type="text/html")
 
 
 @app.get("/demo", include_in_schema=False)
@@ -398,7 +443,7 @@ def tidbyt_page():
                         media_type="text/html")
 
 
-@app.get("/tidbyt/status", include_in_schema=False)
+@app.get("/tidbyt-status", include_in_schema=False)
 def tidbyt_status_page():
     return FileResponse(os.path.join(_SITES, "tidbyt-status.html"),
                         media_type="text/html")

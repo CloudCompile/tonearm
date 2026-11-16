@@ -23,6 +23,7 @@ setOffset(-1500);              // audio listeners start ~1.5s behind the playhea
 
 export function toggle() { panel.hidden = !panel.hidden; }
 export function visible() { return !panel.hidden; }
+export function adjustOffset(delta) { setOffset(Math.max(-5000, Math.min(5000, offsetMs + delta))); }
 
 export async function onState(s) {
   if (!s) return;
@@ -40,11 +41,14 @@ export async function onState(s) {
         const j = await get(`/api/catalog/songs/${encodeURIComponent(lyricsId)}/lyrics`);
         lines = (j.lines || []).filter((l) => l.timeMs != null);
         cache.set(lyricsId, lines);
-      } catch {
+      } catch (e) {
         cache.set(lyricsId, null);
         lines = [];
+        linesEl.textContent = e.status === 404
+          ? "No lyrics available for this track"
+          : "Lyrics are temporarily unavailable";
       }
-      if (!lines.length) linesEl.textContent = "instrumental / no lyrics available";
+      if (!lines.length && !linesEl.textContent) linesEl.textContent = "No lyrics available for this track";
       else paint();
     }
   }

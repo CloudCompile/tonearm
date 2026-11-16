@@ -26,6 +26,7 @@ class DeviceReport(BaseModel):
     version: str | None = Field(default=None, max_length=48)
     ip: str | None = Field(default=None, max_length=48)
     wifi_rssi: int | None = None
+    ssid: str | None = Field(default=None, max_length=32)
     free_heap: int | None = None
     uptime_s: int | None = None
     reset_reason: str | None = Field(default=None, max_length=64)

@@ -424,6 +424,18 @@
       ],
       "title": "Reset Reason"
      },
+     "ssid": {
+      "anyOf": [
+       {
+        "maxLength": 32,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ssid"
+     },
      "state": {
       "anyOf": [
        {
@@ -1803,6 +1815,222 @@
      "isPlaying"
     ],
     "title": "OverlayNowPlaying",
+    "type": "object"
+   },
+   "PartyAction": {
+    "additionalProperties": true,
+    "properties": {
+     "detail": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Detail"
+     },
+     "ok": {
+      "title": "Ok",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "ok"
+    ],
+    "title": "PartyAction",
+    "type": "object"
+   },
+   "PartyCreate": {
+    "additionalProperties": true,
+    "properties": {
+     "name": {
+      "default": "Listening party",
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "title": "PartyCreate",
+    "type": "object"
+   },
+   "PartyCreateResult": {
+    "additionalProperties": true,
+    "properties": {
+     "invite": {
+      "title": "Invite",
+      "type": "string"
+     },
+     "invite_url": {
+      "title": "Invite Url",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "party_id": {
+      "title": "Party Id",
+      "type": "string"
+     },
+     "party_key": {
+      "title": "Party Key",
+      "type": "string"
+     }
+    },
+    "required": [
+     "party_id",
+     "invite",
+     "party_key",
+     "invite_url",
+     "name"
+    ],
+    "title": "PartyCreateResult",
+    "type": "object"
+   },
+   "PartyJoin": {
+    "additionalProperties": true,
+    "properties": {
+     "invite": {
+      "title": "Invite",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     }
+    },
+    "required": [
+     "invite",
+     "name"
+    ],
+    "title": "PartyJoin",
+    "type": "object"
+   },
+   "PartyJoinResult": {
+    "additionalProperties": true,
+    "properties": {
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "party_id": {
+      "title": "Party Id",
+      "type": "string"
+     },
+     "party_key": {
+      "title": "Party Key",
+      "type": "string"
+     },
+     "party_url": {
+      "title": "Party Url",
+      "type": "string"
+     }
+    },
+    "required": [
+     "party_id",
+     "party_key",
+     "party_url",
+     "name"
+    ],
+    "title": "PartyJoinResult",
+    "type": "object"
+   },
+   "PartySearch": {
+    "additionalProperties": true,
+    "properties": {
+     "items": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Items",
+      "type": "array"
+     }
+    },
+    "required": [
+     "items"
+    ],
+    "title": "PartySearch",
+    "type": "object"
+   },
+   "PartyState": {
+    "additionalProperties": true,
+    "properties": {
+     "current_track_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Current Track Id"
+     },
+     "guests": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Guests",
+      "type": "array"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "name": {
+      "title": "Name",
+      "type": "string"
+     },
+     "state": {
+      "title": "State",
+      "type": "string"
+     },
+     "suggestions": {
+      "items": {
+       "additionalProperties": true,
+       "type": "object"
+      },
+      "title": "Suggestions",
+      "type": "array"
+     }
+    },
+    "required": [
+     "id",
+     "name",
+     "state",
+     "suggestions",
+     "guests"
+    ],
+    "title": "PartyState",
+    "type": "object"
+   },
+   "PartySuggestionCreate": {
+    "additionalProperties": true,
+    "properties": {
+     "catalog_id": {
+      "title": "Catalog Id",
+      "type": "string"
+     }
+    },
+    "required": [
+     "catalog_id"
+    ],
+    "title": "PartySuggestionCreate",
+    "type": "object"
+   },
+   "PartyVote": {
+    "additionalProperties": true,
+    "properties": {
+     "vote": {
+      "default": true,
+      "title": "Vote",
+      "type": "boolean"
+     }
+    },
+    "title": "PartyVote",
     "type": "object"
    },
    "PlayRow": {
@@ -6356,6 +6584,506 @@
     "summary": "Now Playing Txt",
     "tags": [
      "overlay"
+    ]
+   }
+  },
+  "/api/party": {
+   "post": {
+    "description": "Create one active party; host API auth/write scope applies.",
+    "operationId": "create_api_party_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PartyCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PartyCreateResult"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Create",
+    "tags": [
+     "party"
+    ]
+   }
+  },
+  "/api/party/active": {
+   "get": {
+    "description": "Host view of the active party; ordinary API auth rules apply.",
+    "operationId": "active_api_party_active_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PartyState"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "Active",
+    "tags": [
+     "party"
+    ]
+   }
+  },
+  "/api/party/join": {
+   "post": {
+    "description": "Exchange a one-time invite for a party-only guest key.",
+    "operationId": "join_api_party_join_post",
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PartyJoin"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PartyJoinResult"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Join",
+    "tags": [
+     "party"
+    ]
+   }
+  },
+  "/api/party/{party_id}": {
+   "get": {
+    "operationId": "state_api_party__party_id__get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "party_id",
+      "required": true,
+      "schema": {
+       "title": "Party Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PartyState"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "State",
+    "tags": [
+     "party"
+    ]
+   }
+  },
+  "/api/party/{party_id}/close": {
+   "post": {
+    "description": "Host-only: ordinary API write authentication is enforced globally.",
+    "operationId": "close_api_party__party_id__close_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "party_id",
+      "required": true,
+      "schema": {
+       "title": "Party Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PartyAction"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Close",
+    "tags": [
+     "party"
+    ]
+   }
+  },
+  "/api/party/{party_id}/guests/{guest_id}": {
+   "delete": {
+    "operationId": "revoke_guest_api_party__party_id__guests__guest_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "party_id",
+      "required": true,
+      "schema": {
+       "title": "Party Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "guest_id",
+      "required": true,
+      "schema": {
+       "title": "Guest Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PartyAction"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Revoke Guest",
+    "tags": [
+     "party"
+    ]
+   }
+  },
+  "/api/party/{party_id}/rotate-invite": {
+   "post": {
+    "operationId": "rotate_invite_api_party__party_id__rotate_invite_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "party_id",
+      "required": true,
+      "schema": {
+       "title": "Party Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PartyCreateResult"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Rotate Invite",
+    "tags": [
+     "party"
+    ]
+   }
+  },
+  "/api/party/{party_id}/search": {
+   "get": {
+    "description": "Catalog-only guest search; exposes no library/personal data.",
+    "operationId": "search_api_party__party_id__search_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "party_id",
+      "required": true,
+      "schema": {
+       "title": "Party Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "query",
+      "name": "term",
+      "required": true,
+      "schema": {
+       "title": "Term",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PartySearch"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Search",
+    "tags": [
+     "party"
+    ]
+   }
+  },
+  "/api/party/{party_id}/suggest": {
+   "post": {
+    "operationId": "suggest_api_party__party_id__suggest_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "party_id",
+      "required": true,
+      "schema": {
+       "title": "Party Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PartySuggestionCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PartyAction"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Suggest",
+    "tags": [
+     "party"
+    ]
+   }
+  },
+  "/api/party/{party_id}/suggestions/{suggestion_id}": {
+   "delete": {
+    "operationId": "remove_suggestion_api_party__party_id__suggestions__suggestion_id__delete",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "party_id",
+      "required": true,
+      "schema": {
+       "title": "Party Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "suggestion_id",
+      "required": true,
+      "schema": {
+       "title": "Suggestion Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PartyAction"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Remove Suggestion",
+    "tags": [
+     "party"
+    ]
+   }
+  },
+  "/api/party/{party_id}/suggestions/{suggestion_id}/vote": {
+   "post": {
+    "operationId": "vote_api_party__party_id__suggestions__suggestion_id__vote_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "party_id",
+      "required": true,
+      "schema": {
+       "title": "Party Id",
+       "type": "string"
+      }
+     },
+     {
+      "in": "path",
+      "name": "suggestion_id",
+      "required": true,
+      "schema": {
+       "title": "Suggestion Id",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PartyVote"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PartyAction"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Vote",
+    "tags": [
+     "party"
     ]
    }
   },

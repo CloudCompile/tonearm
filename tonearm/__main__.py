@@ -25,10 +25,11 @@ def bind_guard():
         return
     detail = (
         f"TONEARM IS EXPOSED WITHOUT AUTH — host={config.host!r} binds beyond "
-        f"loopback and TONEARM_API_KEY is unset. Anyone who can reach this port "
+        f"loopback and no master key is configured. Anyone who can reach this port "
         f"can read your library, listening history and lyrics, and play "
         f"audio through your account.\n"
-        f"  fix: set TONEARM_API_KEY=<secret> (requests then need "
+        f"  fix: set TONEARM_API_KEY=<secret> or create a private "
+        f"~/.config/tonearm/master-key.txt (requests then need "
         f"'Authorization: Bearer <secret>'), or bind to loopback "
         f"(TONEARM_HOST=127.0.0.1).\n"
         f"  inside a container this bind is expected — the port mapping is "

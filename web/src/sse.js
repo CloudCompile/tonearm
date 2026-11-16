@@ -25,10 +25,15 @@ function connect() {
   });
   es.onerror = () => {
     document.getElementById("conn").classList.add("off");
+    document.getElementById("conn").classList.remove("on");
+    document.getElementById("conn-label").textContent = "Reconnecting";
     es.close();
     setTimeout(connect, 2000);
   };
-  es.onopen = () =>
+  es.onopen = () => {
     document.getElementById("conn").classList.remove("off");
+    document.getElementById("conn").classList.add("on");
+    document.getElementById("conn-label").textContent = "Connected";
+  };
 }
 connect();

@@ -1,97 +1,127 @@
 <!doctype html>
-<!-- tonearm PWA (#84) — library browse, search, queue, now-playing, synced
-     lyrics. The shell is cached by the service worker (#90); the API is
-     NEVER cached. Auth dialect: Authorization Bearer OR ?api_key= (stored
-     in localStorage, appended everywhere — EventSource cannot send
-     headers). Layout: wide screens get a listening dashboard (library
-     left, now-playing hero docked right); narrow screens stack. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#0d0e12">
-<link rel="manifest" href="/manifest.webmanifest">
-<title>tonearm</title>
-<link rel="stylesheet" href="/styles.css">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101114">
+<meta name="description" content="Your personal music home, powered by your Apple Music session.">
+<link rel="manifest" href="/manifest.webmanifest?v=2">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23d5fa62'/%3E%3Cpath d='M28 47V17l25-5v29' fill='none' stroke='%2315180a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='20' cy='47' r='8' fill='%2315180a'/%3E%3Ccircle cx='45' cy='41' r='8' fill='%2315180a'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/styles.css?v=2">
+<title>tonearm — your music home</title>
 </head>
 <body>
-<header>
-  <div class="brand">tone<span>arm</span></div>
-  <input id="q" type="search" placeholder="search library & catalog…"
-         autocomplete="off" aria-label="search">
-  <span id="conn" class="conn" title="live stream state">●</span>
-</header>
+<svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-7H9v7H4a1 1 0 0 1-1-1z"/></symbol>
+  <symbol id="i-library" viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="8" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-favorite" viewBox="0 0 24 24"><path d="M20.8 8.8c0 5.4-8.8 11-8.8 11s-8.8-5.6-8.8-11a4.8 4.8 0 0 1 8.8-2.6 4.8 4.8 0 0 1 8.8 2.6Z"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-add-queue" viewBox="0 0 24 24"><path d="M4 6h12M4 12h12M4 18h7M19 16v6M16 19h6"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="m19.4 15 .1.1 1.4 1.1-1.4 2.4-1.7-.7a8 8 0 0 1-1.8 1l-.3 1.8h-2.8l-.3-1.8a8 8 0 0 1-1.8-1l-1.7.7-1.4-2.4L7.1 15a8 8 0 0 1 0-2l-1.4-1.1 1.4-2.4 1.7.7a8 8 0 0 1 1.8-1l.3-1.8h2.8l.3 1.8a8 8 0 0 1 1.8 1l1.7-.7 1.4 2.4-1.4 1.1a8 8 0 0 1-.1 2Z" transform="translate(-1 -1) scale(1.08)"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></symbol>
+  <symbol id="i-profile" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.5"/><path d="M5 21a7 7 0 0 1 14 0"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="m8 5 12 7-12 7z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8 5v14M16 5v14"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path d="m4 5 11 7-11 7zM20 5v14"/></symbol>
+  <symbol id="i-prev" viewBox="0 0 24 24"><path d="m20 5-11 7 11 7zM4 5v14"/></symbol>
+  <symbol id="i-queue" viewBox="0 0 24 24"><path d="M4 6h12M4 12h12M4 18h7M19 15l3 3-3 3"/></symbol>
+  <symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M4 4l5 5M14 14l7 7"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24"><path d="M4 10v4h4l5 4V6l-5 4zM17 9a5 5 0 0 1 0 6M19 6a9 9 0 0 1 0 12"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><circle cx="8" cy="6" r="1"/><circle cx="16" cy="6" r="1"/><circle cx="8" cy="12" r="1"/><circle cx="16" cy="12" r="1"/><circle cx="8" cy="18" r="1"/><circle cx="16" cy="18" r="1"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+</svg>
+<div class="app-shell">
+  <aside id="sidebar" class="sidebar" aria-label="Main navigation">
+    <a class="brand" href="#home" aria-label="tonearm home"><span class="brand-mark">t</span><span>tonearm</span></a>
+    <div class="nav-label">YOUR SPACE</div>
+    <nav class="primary-nav">
+      <button class="nav-item active" data-view="home"><svg class="icon nav-icon"><use href="#i-home"/></svg>Home</button>
+      <button class="nav-item" data-view="browse"><svg class="icon nav-icon"><use href="#i-library"/></svg>Library</button>
+      <button class="nav-item" data-view="favorites"><svg class="icon nav-icon"><use href="#i-favorite"/></svg>Favorites</button>
+      <button class="nav-item" data-view="history"><svg class="icon nav-icon"><use href="#i-clock"/></svg>Recently played</button>
+    </nav>
+    <div class="sidebar-rule"></div>
+    <div class="nav-label nav-label-row">YOUR PLAYLISTS <button id="new-playlist" class="icon-button" title="Create playlist"><svg class="icon"><use href="#i-plus"/></svg></button></div>
+    <div id="playlist-nav" class="playlist-nav"><div class="sidebar-empty">Your playlists will appear here</div></div>
+    <div class="sidebar-bottom"><span id="conn" class="connection-dot"></span><span id="conn-label">Connecting</span><button id="settings" class="icon-button" title="Settings"><svg class="icon"><use href="#i-settings"/></svg></button></div>
+  </aside>
 
-<main>
-  <div class="cols">
-    <div class="col-main">
-      <nav id="tabs">
-        <button data-tab="songs" class="on">songs</button>
-        <button data-tab="albums">albums</button>
-        <button data-tab="artists">artists</button>
-        <button data-tab="playlists">playlists</button>
-        <button data-tab="queue">queue</button>
-      </nav>
-      <section id="list" class="list" tabindex="0"></section>
-      <section id="searchout" hidden>
-        <div id="search-scope" class="muted"></div>
-        <div id="search-list" class="list"></div>
+  <main id="main" class="main-column">
+    <header class="topbar">
+      <button id="mobile-menu" class="icon-button mobile-only" aria-label="Open navigation"><svg class="icon"><use href="#i-menu"/></svg></button>
+      <div class="breadcrumbs"><span>YOUR MUSIC</span><b id="view-title">Home</b></div>
+      <label class="searchbox"><svg class="icon"><use href="#i-search"/></svg><input id="q" type="search" placeholder="Songs, artists, albums…" autocomplete="off" aria-label="Search your library and Apple Music"><kbd>⌘ K</kbd></label>
+      <button id="profile-button" class="profile-button" title="Server settings"><svg class="icon"><use href="#i-profile"/></svg></button>
+    </header>
+
+    <section id="searchout" class="search-overlay" hidden>
+      <div class="search-head"><div><div class="eyebrow">SEARCH</div><h2 id="search-scope">Searching your music…</h2></div><button id="search-close" class="icon-button" aria-label="Close search">×</button></div>
+      <div id="search-list" class="search-results"></div>
+    </section>
+
+    <div class="content-scroll">
+      <section id="view-home" class="page-view">
+        <div class="welcome-row"><div><div class="eyebrow">YOUR LISTENING SPACE</div><h1>Good music, <span>right here.</span></h1><p>Pick up where you left off, or find something for the moment.</p></div><div id="today-date" class="date-chip"></div></div>
+        <section class="feature-grid">
+          <article id="home-now" class="now-card">
+            <div class="now-copy"><div class="eyebrow"><span class="live-pulse"></span> NOW PLAYING</div><h2 id="home-title">Nothing playing yet</h2><p id="home-artist">Choose a song from your library</p><div class="home-controls"><button id="home-play" class="round-control" aria-label="Play or pause"><svg class="icon"><use href="#i-play"/></svg></button><button id="home-next" class="round-control" aria-label="Next track"><svg class="icon"><use href="#i-next"/></svg></button><button id="home-lyrics" class="text-control"><svg class="icon"><use href="#i-note"/></svg>Show lyrics</button></div></div>
+            <div id="home-art" class="home-art"></div>
+          </article>
+          <article class="quick-card"><div class="quick-symbol"><svg class="icon"><use href="#i-note"/></svg></div><div class="eyebrow">QUICK START</div><h3>Make it yours</h3><p>Your library, favorites, and Apple Music search in one place.</p><button class="inline-link" data-go="browse">Browse your library <svg class="icon"><use href="#i-arrow"/></svg></button></article>
+        </section>
+        <section class="section-block"><div class="section-heading"><div><div class="eyebrow">IN YOUR LIBRARY</div><h2>Recently added</h2></div><button class="inline-link" data-go="browse">View library <svg class="icon"><use href="#i-arrow"/></svg></button></div><div id="recent-grid" class="media-grid"><div class="loading-card">Loading your music…</div></div></section>
+        <section class="section-block"><div class="section-heading"><div><div class="eyebrow">MADE FOR YOUR DAY</div><h2>Listen again</h2></div><button class="inline-link" data-go="history">Listening history <svg class="icon"><use href="#i-arrow"/></svg></button></div><div id="history-grid" class="media-grid compact-grid"><div class="loading-card">Loading listening history…</div></div></section>
+      </section>
+
+      <section id="view-browse" class="page-view" hidden>
+        <div class="page-heading"><div><div class="eyebrow">YOUR COLLECTION</div><h1>Library</h1><p>Everything you’ve saved, ready when you are.</p></div><button id="shuffle-library" class="secondary-button"><svg class="icon"><use href="#i-shuffle"/></svg><span>Shuffle all</span></button></div>
+        <nav id="tabs" class="filter-tabs" aria-label="Library type">
+          <button data-tab="songs" class="on">Songs</button><button data-tab="albums">Albums</button><button data-tab="artists">Artists</button><button data-tab="playlists">Playlists</button><button data-tab="queue">Up next</button>
+        </nav>
+        <div id="browse-toolbar" class="list-toolbar"><span id="list-count">Your songs</span><button id="sort-list" class="toolbar-button">Recently added⌄</button></div>
+        <section id="list" class="list" tabindex="0"></section>
+      </section>
+
+      <section id="view-favorites" class="page-view" hidden>
+        <div class="page-heading"><div><div class="eyebrow">THE ONES YOU LOVE</div><h1>Favorites</h1><p>Songs you’ve given a little extra love.</p></div><button id="play-favorites" class="primary-button"><svg class="icon"><use href="#i-play"/></svg><span>Play favorites</span></button></div>
+        <div class="list-toolbar"><span id="favorites-count">Your favorite songs</span></div><section id="favorites-list" class="list"></section>
+      </section>
+
+      <section id="view-history" class="page-view" hidden>
+        <div class="page-heading"><div><div class="eyebrow">YOUR JOURNEY</div><h1>Recently played</h1><p>A little trail of where the music took you.</p></div></div>
+        <div class="list-toolbar"><span>Latest listens</span><span id="history-note" class="muted"></span></div><section id="history-list" class="list"></section>
+      </section>
+
+      <section id="view-playlist" class="page-view" hidden>
+        <div class="playlist-hero"><div id="playlist-art" class="playlist-art"><svg class="icon"><use href="#i-note"/></svg></div><div><div class="eyebrow">YOUR PLAYLIST</div><h1 id="playlist-title">Playlist</h1><p id="playlist-subtitle"></p><div class="playlist-actions"><button id="playlist-play" class="primary-button"><svg class="icon"><use href="#i-play"/></svg><span>Play</span></button><button id="playlist-shuffle" class="secondary-button"><svg class="icon"><use href="#i-shuffle"/></svg><span>Shuffle</span></button></div></div></div>
+        <div class="list-toolbar"><span>Songs</span></div><section id="playlist-list" class="list"></section>
       </section>
     </div>
+  </main>
 
-    <aside class="col-side">
-      <section id="np" class="np">
-        <div class="art-wrap">
-          <div id="art" class="art empty"></div>
-        </div>
-        <div class="np-meta">
-          <div class="np-kicker muted">now playing</div>
-          <h1 id="np-title">—</h1>
-          <div id="np-artist" class="muted">&nbsp;</div>
-          <div class="bar"><div id="np-fill"></div></div>
-          <div class="times muted">
-            <span id="np-elapsed">0:00</span><span id="np-dur">0:00</span>
-          </div>
-          <div class="controls">
-            <button id="prev" title="previous">⏮</button>
-            <button id="play" class="big" title="play/pause">▶</button>
-            <button id="next" title="next">⏭</button>
-          </div>
-          <div class="vol-row">
-            <button id="mute" title="mute">🔈</button>
-            <input id="vol" type="range" min="0" max="1" step="0.01"
-                   title="volume">
-            <button id="listen" title="listen to the server's audio" hidden>🔊 listen</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- synced lyrics (#89, contract in docs/lyrics-contract.md) -->
-      <section id="lyr" hidden>
-        <div class="lyrrow">
-          <span class="muted">lyrics</span>
-          <span class="muted">offset <b id="off">0</b>ms</span>
-          <button id="offMinus">−100</button>
-          <button id="offPlus">+100</button>
-          <button id="lyrClose">close</button>
-        </div>
-        <div id="lyr-lines"></div>
-      </section>
-    </aside>
-  </div>
-</main>
-
-<div id="keyprompt" class="modal" hidden>
-  <div class="modal-card">
-    <h2>server key</h2>
-    <p class="muted">This tonearm runs behind an API key. It is stored in
-       localStorage and sent as <code>?api_key=</code> (and as a Bearer
-       header everywhere fetch can).</p>
-    <input id="key" type="password" placeholder="TONEARM_API_KEY">
-    <button id="keysave">save</button>
-  </div>
+  <aside class="right-rail" aria-label="Now playing and queue">
+    <div class="rail-header"><div><div class="eyebrow">YOUR SESSION</div><h2>Now playing</h2></div><button id="rail-queue" class="icon-button" title="Open queue"><svg class="icon"><use href="#i-queue"/></svg></button></div>
+    <div class="rail-art-wrap"><div id="art" class="rail-art empty"></div><div class="art-glow"></div></div>
+    <div class="rail-track"><div class="rail-track-main"><h3 id="np-title">Nothing playing</h3><p id="np-artist">Choose something to listen to</p></div><button id="favorite-current" class="heart-button" title="Add to favorites"><svg class="icon"><use href="#i-favorite"/></svg></button></div>
+    <div class="progress-wrap"><div class="bar"><div id="np-fill"></div></div><div class="times"><span id="np-elapsed">0:00</span><span id="np-dur">0:00</span></div></div>
+    <div class="transport"><button id="prev" title="Previous"><svg class="icon"><use href="#i-prev"/></svg></button><button id="play" class="transport-play" title="Play or pause"><svg class="icon"><use href="#i-play"/></svg></button><button id="next" title="Next"><svg class="icon"><use href="#i-next"/></svg></button></div>
+    <div class="rail-tools"><button id="mute" title="Mute"><svg class="icon"><use href="#i-volume"/></svg></button><input id="vol" type="range" min="0" max="1" step="0.01" aria-label="Volume"><button id="listen" title="Listen to host audio" hidden>Listen</button></div>
+    <div class="rail-queue"><div class="queue-heading"><div><div class="eyebrow">COMING UP</div><h3>Next in queue</h3></div><button id="queue-view-all" class="inline-link">View all <svg class="icon"><use href="#i-arrow"/></svg></button></div><div id="mini-queue"></div></div>
+    <button id="open-lyrics" class="lyrics-shortcut"><svg class="icon"><use href="#i-note"/></svg><span>Lyrics</span><svg class="icon shortcut-arrow"><use href="#i-arrow"/></svg></button>
+  </aside>
 </div>
 
-<script src="/app.js"></script>
+<div id="mobile-player" class="mobile-player"><div id="mobile-player-fill"></div><button id="mobile-player-button"><span id="mobile-mini-art"><svg class="icon"><use href="#i-note"/></svg></span><span class="mobile-track"><b id="mobile-title">Nothing playing</b><small id="mobile-artist">Choose a song</small></span><span id="mobile-play"><svg class="icon"><use href="#i-play"/></svg></span></button></div>
+<div id="mobile-sheet" class="mobile-sheet" hidden><div class="sheet-top"><button id="sheet-close" class="icon-button"><svg class="icon"><use href="#i-close"/></svg></button><span>NOW PLAYING</span><button id="sheet-queue" class="icon-button"><svg class="icon"><use href="#i-queue"/></svg></button></div><div id="sheet-art"></div><h2 id="sheet-title">Nothing playing</h2><p id="sheet-artist"></p><div class="bar"><div id="sheet-fill"></div></div><div class="times"><span id="sheet-elapsed">0:00</span><span id="sheet-duration">0:00</span></div><div class="transport sheet-transport"><button id="sheet-prev"><svg class="icon"><use href="#i-prev"/></svg></button><button id="sheet-play" class="transport-play"><svg class="icon"><use href="#i-play"/></svg></button><button id="sheet-next"><svg class="icon"><use href="#i-next"/></svg></button></div><button id="sheet-lyrics" class="secondary-button"><svg class="icon"><use href="#i-note"/></svg>Lyrics</button></div>
+
+<div id="lyr" class="lyrics-overlay" hidden><div class="lyrics-card"><div class="lyrics-top"><div><div class="eyebrow">SING ALONG</div><h2>Lyrics</h2></div><div class="lyrrow"><span class="muted">offset <b id="off">0</b>ms</span><button id="offMinus">−100</button><button id="offPlus">+100</button><button id="lyrClose" class="icon-button">×</button></div></div><div id="lyr-lines"></div></div></div>
+
+<div id="keyprompt" class="modal" hidden><div class="modal-card"><div class="eyebrow">CONNECT YOUR SERVER</div><h2>One key, then you’re home.</h2><p class="muted">Your tonearm API key is stored only in this browser and sent to your server.</p><input id="key" type="password" placeholder="TONEARM_API_KEY"><button id="keysave" class="primary-button">Connect securely</button></div></div>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script src="/app.js?v=2"></script>
 </body>
 </html>

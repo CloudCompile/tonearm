@@ -1,6 +1,38 @@
 """tonearm configuration — everything overridable via environment variables."""
+import logging
 import os
+import stat
 from pathlib import Path
+
+
+def _load_master_key():
+    """Read the master key from the environment, or its private fallback file.
+
+    Environment configuration always wins. The file convention supports
+    bare-metal installs where keeping a secret in the service environment is
+    inconvenient; insecurely-permissioned files are ignored rather than
+    silently used as credentials.
+    """
+    key = os.environ.get("TONEARM_API_KEY", "")
+    if key:
+        return key
+
+    path = Path.home() / ".config" / "tonearm" / "master-key.txt"
+    try:
+        mode = stat.S_IMODE(path.stat().st_mode)
+        if mode & 0o077:
+            logging.getLogger("tonearm.config").warning(
+                "master key file %s has group/other permissions; ignoring it "
+                "(run chmod 600 %s)", path, path)
+            return ""
+        return path.read_text(encoding="utf-8").strip()
+    except FileNotFoundError:
+        return ""
+    except OSError as exc:
+        logging.getLogger("tonearm.config").warning(
+            "could not read master key file %s: %s", path, exc)
+        return ""
+
 
 class Config:
     # --- browser / CDP ---
@@ -16,11 +48,12 @@ class Config:
     # --- local API ---
     host: str = os.environ.get("TONEARM_HOST", "127.0.0.1")
     port: int = int(os.environ.get("TONEARM_PORT", "8188"))
-    # Optional shared secret; if set, all /api routes require "Authorization: Bearer <key>"
-    api_key: str = os.environ.get("TONEARM_API_KEY", "")
-    # Make the unauthenticated non-localhost bind FATAL instead of a loud
-    # warning. Default warn-only because inside a container binding 0.0.0.0
-    # is normal and correct (the port mapping is the boundary).
+    # Optional shared secret; env wins, then ~/.config/tonearm/master-key.txt.
+    # If set, all /api routes require "Authorization: Bearer <key>".
+    api_key: str = _load_master_key()
+    # Make a non-localhost bind without a configured master key FATAL instead
+    # of a loud warning. Default warn-only because inside a container binding
+    # 0.0.0.0 is normal and correct (the port mapping is the boundary).
     strict_bind: bool = os.environ.get("TONEARM_STRICT_BIND", "0") == "1"
 
     # --- behavior ---
@@ -162,6 +195,9 @@ class Config:
     # you opt in. The db holds listening history + library snapshots on YOUR
     # volume; nothing leaves the machine.
     store_enabled: bool = os.environ.get("TONEARM_STORE", "0") == "1"
+    # Invite-only party queue; requires the store and uses separate guest
+    # credentials that never grant access to the rest of the API.
+    party_enabled: bool = os.environ.get("TONEARM_PARTY", "0") == "1"
     # How often (seconds) the background library snapshot walk runs. The walk
     # is ~1 eval/page of ~100 songs — slow cadence by design, skipped while
     # the watchdog reports a renderer stall.

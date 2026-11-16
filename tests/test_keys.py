@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 import unittest.mock
+from pathlib import Path
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -88,6 +89,38 @@ class TestRegistry(unittest.TestCase):
         kid, raw = r.add("friend")
         listing = json.dumps(r.list())
         self.assertNotIn(raw, listing)
+
+
+class TestMasterKeyConfig(unittest.TestCase):
+    def setUp(self):
+        self.home = tempfile.mkdtemp(prefix="tonearm-master-key-test-")
+        self.path = Path(self.home) / ".config" / "tonearm" / "master-key.txt"
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text("file-master-secret\n", encoding="utf-8")
+        self.path.chmod(0o600)
+        self.home_patch = unittest.mock.patch(
+            "tonearm.config.Path.home", return_value=Path(self.home))
+        self.home_patch.start()
+        self.addCleanup(self.home_patch.stop)
+        self.env_patch = unittest.mock.patch.dict(os.environ,
+                                                 {"TONEARM_API_KEY": ""})
+        self.env_patch.start()
+        self.addCleanup(self.env_patch.stop)
+
+    def test_private_file_is_used_and_whitespace_is_stripped(self):
+        self.assertEqual(cfg._load_master_key(), "file-master-secret")
+
+    def test_environment_wins_over_file(self):
+        os.environ["TONEARM_API_KEY"] = "environment-secret"
+        self.assertEqual(cfg._load_master_key(), "environment-secret")
+
+    def test_insecure_file_is_ignored(self):
+        self.path.chmod(0o640)
+        self.assertEqual(cfg._load_master_key(), "")
+
+    def test_missing_file_means_no_master_key(self):
+        self.path.unlink()
+        self.assertEqual(cfg._load_master_key(), "")
 
 
 class TestRateLimiter(unittest.TestCase):
