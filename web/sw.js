@@ -2,8 +2,8 @@
    The shell is precached on install and re-fetched stale-while-revalidate;
    every /api request goes straight to the network (it is live data — an
    audio stream or a playhead snapshot served from cache is a lie). */
-const CACHE = "tonearm-shell-v3";
-const SHELL = ["/", "/app.js?v=2", "/styles.css?v=2", "/manifest.webmanifest?v=2"];
+const CACHE = "tonearm-shell-v4";
+const SHELL = ["/", "/app.js?v=3", "/styles.css?v=3", "/manifest.webmanifest?v=3"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE)

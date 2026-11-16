@@ -342,6 +342,13 @@ install_error_handlers(app)
 async def deprecation_guard(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
+    # the PWA SHELL must revalidate every load — a heuristically-cached
+    # index.html pairs an old bundle with a new stylesheet (or the reverse)
+    # and renders a broken half-app (found live: the redesigned PWA loaded
+    # stale through the funnel until a second hard reload). no-cache = the
+    # browser may cache, but MUST revalidate against the etag each time.
+    if path in ("/", "/index.html", "/sw.js"):
+        response.headers.setdefault("Cache-Control", "no-cache")
     if path.startswith("/api/") or path == "/health":
         try:
             deprecate.stamp(response, path, SURFACE)

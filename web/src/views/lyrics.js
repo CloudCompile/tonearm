@@ -35,6 +35,13 @@ export async function onState(s) {
     if (cache.has(lyricsId)) {
       lines = cache.get(lyricsId) || [];
       paint();
+    } else if (String(lyricsId).startsWith("i.")) {
+      // library ids never resolve in the catalog lyrics surface — don't
+      // burn a doomed request on every library track (the 404 spam found
+      // on the live host); the message says why, quietly.
+      cache.set(lyricsId, null);
+      lines = [];
+      linesEl.textContent = "no lyrics for library copies of this track";
     } else {
       linesEl.textContent = "…";
       try {

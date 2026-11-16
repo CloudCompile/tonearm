@@ -290,11 +290,19 @@ async function loadHistory() {
     let history;
     try {
       const page = await get("/api/history/recently-played", { limit: 100 });
+      // a freshly-enabled store returns 200 with an EMPTY archive — fall
+      // back to Apple's recent list until the local rows exist, otherwise
+      // the page looks emptier than before the store was on
+      if (!(page.items || []).length) throw Object.assign(new Error("empty"), { fallback: true });
       history = { ...page, items: (page.items || []).map((x) => ({ ...x,
         id: x.id, catalog_id: x.id, name: x.title, type: "songs" })) };
       $("history-note").textContent = "Your tonearm listening history";
+    } catch (e) {
+      if (!e?.fallback) throw e;
+      const personal = await get("/api/personal/recently-played", { limit: 20 });
+      history = { items: personal.items || [], next_offset: null };
+      $("history-note").textContent = "Recent Apple Music history (the local archive fills as you play)";
     }
-    catch { const personal = await get("/api/personal/recently-played", { limit: 20 }); history = { items: personal.items || [], next_offset: null }; $("history-note").textContent = "Recent Apple Music history"; }
     const rows = history.items || [];
     await list.setLoader(async () => ({ items: rows, next_offset: null }));
   } catch (e) { $("history-list").innerHTML = `<div class="loading-card">${esc(e.message || "History unavailable")}</div>`; }
@@ -333,8 +341,10 @@ async function loadHome() {
   catch (e) { $("recent-grid").innerHTML = `<div class="loading-card">${esc(e.message || "Your library is unavailable")}</div>`; }
   try {
     let items;
-    try { items = (await get("/api/history/recently-played", { limit: 5 })).items || []; }
-    catch { items = (await get("/api/personal/recently-played", { limit: 5 })).items || []; }
+    let page = null;
+    try { page = await get("/api/history/recently-played", { limit: 5 }); } catch { /* store off or empty */ }
+    if (page && (page.items || []).length) items = page.items;
+    else items = (await get("/api/personal/recently-played", { limit: 5 })).items || [];
     renderRecent(items, "history-grid");
   } catch { $("history-grid").innerHTML = `<div class="loading-card">Listening history appears as you play</div>`; }
 }
