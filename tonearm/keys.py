@@ -182,10 +182,13 @@ class KeysRegistry:
                 for k in self._load()]
 
     def revoke(self, key_id):
+        """Revoke by k-id OR by name (the CLI's add is name-keyed; making
+        revoke name-only would force a `keys list` round trip — found in
+        the rc soak)."""
         with self._lock:
             keys = list(self._load())
             for k in keys:
-                if k["id"] == key_id:
+                if k["id"] == key_id or k.get("name") == key_id:
                     if k.get("revoked"):
                         return False          # already dead — say so
                     k["revoked"] = time.time()
@@ -301,7 +304,7 @@ def main():
                   f"rate={k['rate'] or 'unltd'}  {state}")
     elif args.cmd == "revoke":
         print("revoked" if registry.revoke(args.key_id)
-              else f"no key {args.key_id!r}")
+              else f"no active key {args.key_id!r} (unknown or already revoked)")
 
 
 if __name__ == "__main__":
