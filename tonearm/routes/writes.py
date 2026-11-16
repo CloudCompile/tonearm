@@ -84,11 +84,17 @@ def get_rating(song_id: str, fresh: bool = False):
 
 @router.put("/ratings/songs/{song_id}", response_model=OkRating)
 def rate_song(song_id: str, rating: str = None):
-    """rating: 'like' or 'none'."""
+    """rating: 'like' or 'none' (query param `rating`, NOT `value` —
+    favorites uses `value`, this route never did; found live in the
+    rc soak where a `?value=` caller got a hint that blamed the
+    rating words instead of the param name)."""
     _guard()
     if rating not in ("like", "none"):
-        raise HTTPException(400, "rating must be 'like' or 'none' (dislike is "
-                                 "accepted by Apple but stores as like — not exposed)")
+        raise HTTPException(400, f"pass ?rating=like|none (the query param is "
+                                 f"'rating'; got {rating!r} — favorites uses "
+                                 f"'value', this route doesn't. Dislike is "
+                                 f"accepted by Apple but stores as like — "
+                                 f"not exposed)")
     try:
         mk.rate_song(song_id, True if rating == "like" else None)
         webhooks.emit(webhooks.RATING_CHANGED,
@@ -163,7 +169,14 @@ def remove_album_from_library(library_album_id: str):
 
 @router.post("/playlists", response_model=OkPlaylist)
 def create_playlist(name: str = None, description: str = ""):
-    """Create a library playlist. Returns the new playlist id."""
+    """Create a library playlist. Returns the new playlist id.
+
+    SLOW ON PURPOSE: this drives Apple's UI automation and can take up
+    to ~2 minutes to return. Set client timeouts ABOVE that — a timed-out
+    client cannot see the id of a playlist the server goes on to create
+    (orphaned-until-you-look-it-up-in-audit; found live in the rc soak).
+    The creation is also audited (`/api/audit`), so a lost id is always
+    recoverable there."""
     _guard()
     if not name:
         raise HTTPException(400, "name is required")
