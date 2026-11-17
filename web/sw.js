@@ -5,8 +5,8 @@
    same-origin GETs, which are versioned via ?v=N URLs anyway.
    Every /api request goes straight to the network (live data — a cached
    playhead or audio stream would be a lie). */
-const CACHE = "tonearm-shell-v5";
-const SHELL = ["/", "/app.js?v=4", "/styles.css?v=4", "/manifest.webmanifest?v=4"];
+const CACHE = "tonearm-shell-v6";
+const SHELL = ["/", "/app.js?v=5", "/styles.css?v=5", "/manifest.webmanifest?v=5"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE)
