@@ -19,7 +19,7 @@ jobs:
 
       # QEMU is what makes the arm64 build possible on amd64 runners;
       # buildx drives both platforms in one command.
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@v4
 
       - uses: docker/setup-buildx-action@v3
 
