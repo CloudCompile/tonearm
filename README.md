@@ -651,7 +651,8 @@ python3 -m tonearm keys revoke k-ab12cd34
 
 ### The OpenCode plugin — your agent runs the music
 
-`plugins/opencode-tonearm/tonearm.js` — a server-part OpenCode plugin: the
+`plugins/opencode-tonearm/` — a server-part OpenCode plugin (`src/index.ts`;
+the sidebar panel builds to `dist/gui-experimental.cjs`): the
 agent gets a `tonearm` tool namespace (`play`/`search`/`pause`/`next`/
 `now`/`listen`) and can literally play your library from inside a coding
 session ("play something chill while you refactor"). Because it runs in
@@ -659,14 +660,25 @@ the OpenCode server, it works the same from the TUI, the web UI, or a URL
 on another computer — and the human hears it through the funnel stream
 (the `listen` tool prints the exact command for wherever they are).
 
-Deploy: symlink it into the global plugins dir, then make it a key:
+Deploy: install its deps, symlink the server part into the global plugins
+dir, then make it a key. The plugin never carries the key itself — it
+reads `TONEARM_KEY`, else `~/.config/tonearm/opencode-key.txt` (0600):
 
 ```bash
-ln -sf ~/tonearm/plugins/opencode-tonearm/tonearm.js \
+cd ~/tonearm/plugins/opencode-tonearm && npm install
+ln -sf ~/tonearm/plugins/opencode-tonearm/src/index.ts \
   ~/.config/opencode/plugins/tonearm.js
 python3 -m tonearm keys add opencode --scopes read,write --rate 600
-# paste the raw key as TONEARM_KEY in the plugin file (or the env)
+# paste the raw key into ~/.config/tonearm/opencode-key.txt (chmod 600),
+# or export TONEARM_KEY
 ```
+
+Known upstream issue: `@opencode/plugin` → `@opencode/util` pins
+`minimatch` 10.2.5 and `glob` 13.0.5 exactly, so dependabot reports two
+moderate advisories (glob traversal / ReDoS) that only an upstream release
+can clear. Don't paper over them with npm `overrides` — that chain is the
+SDK's own plugin installer, and a forced major bump is likelier to break
+installs than to fix anything reachable from this plugin's tools.
 
 ### Errors — one shape everywhere
 
