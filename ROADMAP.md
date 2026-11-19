@@ -133,12 +133,11 @@ its own renderer.*
 - [x] **Session-expiry UX** — `/health` carries `session: ok | expired`
       (a dead session must say "run `python -m tonearm login`", not
       403 everywhere) `S P1` (#189, found live)
-- [ ] **Multi-account support** — a second Apple profile behind a selector
-      header `L P2` (#48, #121–#122: research spike first)
-- [ ] **Party mode** — shared queue with voting (research how far one
-      session can be pushed) `L P2` (#49, #123–#125)
-- [ ] **CDP eval priorities** — playback evals never queue behind a
-      background walk `M P2` (#188 — depends on how #174's fix holds up)
+- [x] **Party mode** — shared queue with voting on the one session.
+      Shipped on `main` after `v1.0.0-rc.1` (lands in 1.0.0): invite-only
+      guests with party-only keys, catalog-only suggestions, votes, the
+      vote leader slotted by `playNext` near track end, caps and
+      store-backed state `L P2` (#49, #123–#125)
 
 ## v0.8.0 — Freeze & Docs
 
@@ -185,6 +184,10 @@ their sub-issues (#132–#137); the two P2s (#185, #187) moved to Moonshots.
       final pass `S P0`
 - [ ] **`v1.0.0`** — when the surface is stable, documented, backed up,
       and observable. The freeze policy owns everything after.
+- [ ] **CDP eval priorities** — playback evals never queue behind a
+      background walk (one eval lock today; a background walk mid-page-load
+      can delay a play) `M P2` (#188 — design pass, depends on how #174's
+      fix holds up)
 
 *(Moonshots graduated: batch endpoint, multi-storefront, the bridges and
 recipes — all scheduled above. New moonshots land here when they show up.)*
@@ -198,6 +201,11 @@ GitHub milestone: `Moonshots — unscheduled`.
       Jellyfin/Plex metadata, or expose tonearm's now-playing/history to
       them as a metadata source. Shape TBD by a research spike; rides the
       store's play archive `L P2` (#185)
+- [ ] **Multi-account support** — a second Apple profile behind a selector
+      header. Transferred from v0.7: the CDP layer's one-persistent-tab
+      flatness is load-bearing, each account needs its own sink + pipeline,
+      so a research spike comes first and the outcome may honestly be
+      "run two instances" `L P2` (#48, #121–#122)
 - [ ] **Voice-control skill** — "play some ISOxo" via a voice assistant.
       Platform TBD (HA Assist / Alexa skill / local whisper);
       `docs/ha-recipes.md` is the proof of concept, a real skill needs

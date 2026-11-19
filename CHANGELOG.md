@@ -8,6 +8,90 @@ policy](docs/deprecation.md) governs breaking changes).
 Release notes for each version are drafted by `scripts/release_notes.py`
 (merged PRs since the previous tag) and edited by hand before publishing.
 
+## [Unreleased]
+
+### Added
+- **Listening parties** (#49, #123–#125): invite-only party queue on the one
+  session. The host creates an invite (`POST /api/party`), guests join at
+  `/party/join?invite=…` with party-only keys limited to catalog search,
+  suggest, vote and the live stream. The vote leader is slotted with
+  `playNext` near the end of a track — it steers the session, never
+  interrupts a populated queue, and never opens a second stream. Caps:
+  20 guests, 100 queued songs, 10 votes per guest, one guest write per 2s;
+  parties/suggestions/votes live in the store, so a restart doesn't kill
+  the party. Requires `TONEARM_PARTY=1` **and** `TONEARM_STORE=1`
+  (`tonearm/routes/party.py`, `tonearm/sites/party.html`,
+  `tests/test_party.py`).
+- **Lyrics for devices** — `GET /api/playback/lyrics-now` returns the
+  current line ±1 for the Tidbyt display; library tracks that simply have
+  no lyrics now resolve quietly instead of 404-spamming the log.
+- **Vendored CLI** — `scripts/tonearm-cli` ships the agent-facing client in
+  the repo (#213).
+- **Device status** — `GET /api/device/tidbyt/status` (renamed from
+  `tidbyt-status`) carries the device snapshot incl. SSID for firmware
+  0.4.28.
+
+### Changed
+- The PWA is now a daily listening workspace (party join, lyrics, library
+  views), backed by a network-first service worker plus a build stamp so a
+  stale shell cannot survive a deploy.
+- Write surface is honest: ratings say when writes are disabled, and
+  playlist creation surfaces its latency instead of looking hung (#213).
+
+### Fixed
+- `~/.config/tonearm/master-key.txt` (0600) is a real fallback for
+  `TONEARM_API_KEY`, so a bare-metal install without an env secret still
+  has a master identity; group/other-readable files are ignored with a
+  warning (#210).
+- Library view sorts by actually-recent-added; lyrics 404s quieted; the
+  sidebar playlist list scrolls instead of squashing; the right-rail
+  stylesheet block restored.
+- CI: the new lyrics route is typed, and party pages/streams are exempt
+  from the response-model conformance gate.
+
+## [1.0.0-rc.1] — 2026-11-16 — The Candidate
+
+The freeze candidate: same surface as v0.9.0, pinned and marked 1.0.
+Per the roadmap, rc is **fixes only** — the deprecation registry is
+empty (nothing announced in v0.8 died), so no route or shape changes
+ride this train. From here until 1.0.0 final: bug fixes, docs, and the
+live soak; the [freeze policy](docs/deprecation.md) owns the surface
+after.
+
+### Changed
+- Surface pin `1.0.0-rc.1` — clients see `X-Tonearm-Surface: 1.0` and
+  `/health` `surface: 1.0`, the signal that the contract of record is
+  now the 1.0 train.
+
+## [0.9.0] — 2026-11-16 — Install & Harness (Tidbyt stable)
+
+Tidbyt Gen 2 support is now stable/released, and the install + offline
+regression story lands for bare metal and CI.
+
+### Added
+- **Tidbyt Gen 2 firmware & device integration** (`firmware/tidbyt-nowplaying/`, `/api/device/tidbyt/*`): the dead-cloud pixel display becomes a tonearm
+  now-playing screen, stream speaker, and gesture remote (1 tap toggle / 2
+  taps next / 3 taps smart-back / hold playlist 1 / double hold playlist 2).
+  ESPHome pinned 2025.8.0; device authenticates with its own revocable scoped
+  key (OTA/log shipping/reporting/cmd polling endpoints).
+- **Install script** (`scripts/install.sh`, #132): venv bootstrap, dependency
+  install, 0700 Chrome profile dir, Chrome/audio-dep checks; safe to re-run.
+- **systemd unit generator** (`scripts/systemd_unit.py`, #133): emits a user
+  or system unit with proper detachment/restart policy, `XDG_RUNTIME_DIR`/
+  pulse env for audio, non-root defaults, and explicit key/profile handling.
+- **Fresh-VM runbook** (`docs/install.md`, #134): timed, documented proof path
+  for bare-metal installs.
+- **Offline route harness** (`tests/test_route_harness.py`,
+  `scripts/harness_routes.py`, #53/#135/#136): fixture-driven regression over
+  a mock server via plain urllib (no TestClient, no Chrome/Pulse/X, no Apple),
+  runnable in CI/unittest against synthetic fixtures.
+- **Live-vs-mock parity procedure** (`docs/harness-parity.md`, #137): manual
+  spot-check guide to catch fixture/value/ordering rot the model checks can't.
+- **Deploy docs: tunnel era** (`docs/deploy-tunnels.md`, #190): LAN vs
+  Tailscale Serve (tailnet) vs Tailscale Funnel (public, SSE-safe) vs
+  Cloudflare quick tunnels (pages work, SSE starved — avoid for live UI),
+  including key-prompt flow notes.
+
 ## [0.8.0] — 2026-11-13 — The Freeze
 
 The release where the API surface becomes a contract: documented
@@ -55,54 +139,6 @@ catalog goes worldwide.
   between processes (the contract gate's first catch, fixed at root).
 - `fastapi` pinned exactly — schema output varies by patch version and
   the snapshot must not drift.
-
-## [Unreleased]
-
-### Added
-- (nothing yet)
-
-## [1.0.0-rc.1] — 2026-11-16 — The Candidate
-
-The freeze candidate: same surface as v0.9.0, pinned and marked 1.0.
-Per the roadmap, rc is **fixes only** — the deprecation registry is
-empty (nothing announced in v0.8 died), so no route or shape changes
-ride this train. From here until 1.0.0 final: bug fixes, docs, and the
-live soak; the [freeze policy](docs/deprecation.md) owns the surface
-after.
-
-### Changed
-- Surface pin `1.0.0-rc.1` — clients see `X-Tonearm-Surface: 1.0` and
-  `/health` `surface: 1.0`, the signal that the contract of record is
-  now the 1.0 train.
-
-## [0.9.0] — 2026-11-16 — Install & Harness (Tidbyt stable)
-
-Tidbyt Gen 2 support is now stable/released, and the install + offline
-regression story lands for bare metal and CI.
-
-### Added
-- **Tidbyt Gen 2 firmware & device integration** (`firmware/tidbyt-nowplaying/`, `/api/device/tidbyt/*`): the dead-cloud pixel display becomes a tonearm
-  now-playing screen, stream speaker, and gesture remote (1 tap toggle / 2
-  taps next / 3 taps smart-back / hold playlist 1 / double hold playlist 2).
-  ESPHome pinned 2025.8.0; device authenticates with its own revocable scoped
-  key (OTA/log shipping/reporting/cmd polling endpoints).
-- **Install script** (`scripts/install.sh`, #132): venv bootstrap, dependency
-  install, 0700 Chrome profile dir, Chrome/audio-dep checks; safe to re-run.
-- **systemd unit generator** (`scripts/systemd_unit.py`, #133): emits a user
-  or system unit with proper detachment/restart policy, `XDG_RUNTIME_DIR`/
-  pulse env for audio, non-root defaults, and explicit key/profile handling.
-- **Fresh-VM runbook** (`docs/install.md`, #134): timed, documented proof path
-  for bare-metal installs.
-- **Offline route harness** (`tests/test_route_harness.py`,
-  `scripts/harness_routes.py`, #53/#135/#136): fixture-driven regression over
-  a mock server via plain urllib (no TestClient, no Chrome/Pulse/X, no Apple),
-  runnable in CI/unittest against synthetic fixtures.
-- **Live-vs-mock parity procedure** (`docs/harness-parity.md`, #137): manual
-  spot-check guide to catch fixture/value/ordering rot the model checks can't.
-- **Deploy docs: tunnel era** (`docs/deploy-tunnels.md`, #190): LAN vs
-  Tailscale Serve (tailnet) vs Tailscale Funnel (public, SSE-safe) vs
-  Cloudflare quick tunnels (pages work, SSE starved — avoid for live UI),
-  including key-prompt flow notes.
 
 ## [0.7.0] — 2026-11-13 — Multi-user
 
