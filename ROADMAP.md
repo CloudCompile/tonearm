@@ -170,10 +170,11 @@ chat log. Surface additions land HERE or wait for 1.x.*
       parity checks)
 - [x] **Deploy docs: the tunnel era** — funnel vs quick tunnel vs LAN
       (quick tunnels starve SSE; funnels don't — found live) `S P1` (#190)
-- [ ] **Jellyfin/Plex metadata bridge** `L P2` (#185, spike first)
 - [x] **ESP32 now-playing display recipe** — shipped as the Tidbyt Gen 2
       firmware integration (v0.9.0) `S P2` (#186)
-- [ ] **Voice-control skill** `M P2` (#187 — HA Assist / platform TBD)
+
+**Shipped in v0.9.0** — the install/harness umbrellas (#52, #53) closed on
+their sub-issues (#132–#137); the two P2s (#185, #187) moved to Moonshots.
 
 ## v1.0.0 — rc & soak
 
@@ -187,6 +188,21 @@ chat log. Surface additions land HERE or wait for 1.x.*
 
 *(Moonshots graduated: batch endpoint, multi-storefront, the bridges and
 recipes — all scheduled above. New moonshots land here when they show up.)*
+
+## Moonshots — unscheduled
+
+*No agreed design, no release target. A spike earns a versioned milestone.*
+GitHub milestone: `Moonshots — unscheduled`.
+
+- [ ] **Jellyfin/Plex metadata bridge** — enrich the store's rows with
+      Jellyfin/Plex metadata, or expose tonearm's now-playing/history to
+      them as a metadata source. Shape TBD by a research spike; rides the
+      store's play archive `L P2` (#185)
+- [ ] **Voice-control skill** — "play some ISOxo" via a voice assistant.
+      Platform TBD (HA Assist / Alexa skill / local whisper);
+      `docs/ha-recipes.md` is the proof of concept, a real skill needs
+      intent mapping onto `/api/catalog/search` + `/api/playback/*`
+      `M P2` (#187)
 
 ## Non-goals
 
