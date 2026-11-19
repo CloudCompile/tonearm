@@ -133,11 +133,10 @@ its own renderer.*
 - [x] **Session-expiry UX** — `/health` carries `session: ok | expired`
       (a dead session must say "run `python -m tonearm login`", not
       403 everywhere) `S P1` (#189, found live)
-- [x] **Party mode** — shared queue with voting on the one session.
-      Shipped on `main` after `v1.0.0-rc.1` (lands in 1.0.0): invite-only
-      guests with party-only keys, catalog-only suggestions, votes, the
-      vote leader slotted by `playNext` near track end, caps and
-      store-backed state `L P2` (#49, #123–#125)
+
+*Party mode and multi-account were planned here and didn't make 0.7.0:
+party shipped after rc (below, in 1.0.0), multi-account is parked in
+[Moonshots](#moonshots--unscheduled).*
 
 ## v0.8.0 — Freeze & Docs
 
@@ -184,6 +183,11 @@ their sub-issues (#132–#137); the two P2s (#185, #187) moved to Moonshots.
       final pass `S P0`
 - [ ] **`v1.0.0`** — when the surface is stable, documented, backed up,
       and observable. The freeze policy owns everything after.
+- [x] **Party mode** — shared queue with voting on the one session; landed
+      on `main` after `v1.0.0-rc.1`, so it ships in 1.0.0. Invite-only
+      guests with party-only keys, catalog-only suggestions, votes, the
+      vote leader slotted by `playNext` near track end, caps and
+      store-backed state `L P2` (#49, #123–#125)
 - [ ] **CDP eval priorities** — playback evals never queue behind a
       background walk (one eval lock today; a background walk mid-page-load
       can delay a play) `M P2` (#188 — design pass, depends on how #174's
