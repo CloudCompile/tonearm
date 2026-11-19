@@ -35,6 +35,8 @@ Release notes for each version are drafted by `scripts/release_notes.py`
 - The PWA is now a daily listening workspace (party join, lyrics, library
   views), backed by a network-first service worker plus a build stamp so a
   stale shell cannot survive a deploy.
+- `fastapi` exact pin 0.162.7 → 0.163.0 (#216); the OpenAPI contract gate
+  confirmed the snapshot is unchanged, so the 1.0 surface still holds.
 - Write surface is honest: ratings say when writes are disabled, and
   playlist creation surfaces its latency instead of looking hung (#213).
 
@@ -91,6 +93,13 @@ regression story lands for bare metal and CI.
   Tailscale Serve (tailnet) vs Tailscale Funnel (public, SSE-safe) vs
   Cloudflare quick tunnels (pages work, SSE starved — avoid for live UI),
   including key-prompt flow notes.
+
+> **Tag note:** `v0.9.0` points at `a725f58f`, which is not an ancestor of
+> `main` — main's copy of the release commit is `3c26479a`, regenerated
+> alongside the post-release CI fix (#207). The tagged tree and the shipped
+> tree are identical (`git diff v0.9.0 8cc8e764` is empty), so nothing is
+> missing from the release; only ancestry disagrees, and the tag stays as
+> published rather than being force-moved.
 
 ## [0.8.0] — 2026-11-13 — The Freeze
 
