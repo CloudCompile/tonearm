@@ -8,3 +8,4 @@ firmware/**/secrets.yaml
 # PWA build output — produced by CI and the Docker build stage, never committed
 tonearm/web-dist/
 web/node_modules/
+plugins/opencode-tonearm/node_modules/
