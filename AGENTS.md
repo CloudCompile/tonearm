@@ -33,3 +33,8 @@ Live-account testing against the user's real Apple Music account is fine
 - `python3` not `python`; hermetic tests: `python3 -m unittest discover -s tests`
 - untracked `launch/` dir = user's marketing work — never commit
 - PRs: #198 (sidebar player plugin, CI green), #199 (VPS savings)
+
+<!-- entire-agent:begin -->
+Read .entire/agent-guide.md for this repository's workflow, source inspection, and verification guidance.
+@.entire/agent-guide.md
+<!-- entire-agent:end -->

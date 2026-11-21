@@ -1,0 +1,8 @@
+# Paths the brain should never index.
+# gitignore-style: these are kept out of repository context and the code index.
+
+# User's marketing work; never committed, never indexed.
+launch/
+
+# 134 MB of generated media (89 MB mp4, 37 MB wav). Not code, not docs.
+visualizer/
