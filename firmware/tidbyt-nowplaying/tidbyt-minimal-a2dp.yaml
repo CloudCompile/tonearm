@@ -23,7 +23,7 @@ substitutions:
   # metadata, the heartbeat, and the OTA cmd poll. Bump HERE only.
   # (0.4.30 shipped still self-reporting 0.4.29 — the reason the armed
   # trigger never disarmed and status showed a stale version.)
-  fw_version: "0.4.31"
+  fw_version: "0.4.34"
   # Device audio playback lags the server playhead (decode/buffer). Subtract
   # this from the displayed progress so the bar matches what you hear.
   # 0.4.28: recalibrated on-device after each audio start (offset_calibrated).
@@ -62,7 +62,12 @@ wifi:
   # Multi-network failover (0.4.28): networks are tried in order; if the
   # primary is unreachable the device hops to the next. Credentials live in
   # secrets.yaml (chmod 600, never committed).
+  # 0.4.34: trip hotspot first. fast_connect is off, so the device scans and
+  # picks the first listed SSID that is actually present — an absent entry
+  # costs nothing, so keeping the hotspot on top doesn't slow home boot.
   networks:
+    - ssid: !secret wifi_ssid_6     # trip hotspot, ALL CAPS (open — no password)
+    - ssid: !secret wifi_ssid_8     # trip hotspot, mixed case (open)
     - ssid: !secret wifi_ssid
       password: !secret wifi_password
     - ssid: !secret wifi_ssid_2
@@ -73,7 +78,6 @@ wifi:
       password: !secret wifi_password_4
     - ssid: !secret wifi_ssid_5
       password: !secret wifi_password_5
-    - ssid: !secret wifi_ssid_6     # open network — no password
     - ssid: !secret wifi_ssid_7
       password: !secret wifi_password_7
   # If every network fails: fallback AP portal so it can be re-provisioned
@@ -180,6 +184,12 @@ media_player:
             id: audio_state
             value: '"idle"'
         - script.execute: report_status
+        # Self-healing audio (0.4.33): a server restart or stream hiccup
+        # ends the connection and leaves the player idle — replay after a
+        # short settle. Capped at 5 attempts per 10-minute window so an
+        # intentionally-down server can't crash-loop the device.
+        # (script body lives in the single `script:` block below)
+        - script.execute: audio_recover
 
 external_components:
   - source:
@@ -238,6 +248,37 @@ update:
 # controller library statically reserved internal RAM the audio path needed.
 # Bose audio moves to a companion chip fed by the same stream URL.
 script:
+  # Self-healing audio (0.4.33): replay the stream after the player goes
+  # idle (server restart / stream hiccup). Capped at 5 attempts per
+  # 10-minute window; collapsed if another idle fires while waiting.
+  - id: audio_recover
+    mode: restart
+    then:
+      - delay: 10s
+      - if:
+          condition:
+            and:
+              - wifi.connected:
+              - lambda: |-
+                  if (millis() - id(audio_last_attempt_ms) > 600000UL)
+                    id(audio_retry_count) = 0;          // window reset
+                  return id(audio_retry_count) < 5 && ta_dma_heap() > 48000;
+          then:
+            - globals.set:
+                id: audio_retry_count
+                value: !lambda 'return id(audio_retry_count) + 1;'
+            - globals.set:
+                id: audio_last_attempt_ms
+                value: !lambda 'return (int) millis();'
+            - globals.set:
+                id: audio_state
+                value: '"recovering"'
+            - logger.log:
+                format: "audio recover: retry #%d dma_heap=%u"
+                args: ['id(audio_retry_count)', 'ta_dma_heap()']
+            - media_player.play_media:
+                id: onboard_speaker
+                media_url: "${tonearm_base}/api/audio/stream.mp3?join_pad=0&api_key=${tonearm_key}"
   - id: report_status
     mode: restart
     then:
@@ -657,6 +698,46 @@ display:
         return;
       }
       // — view 0: now playing (backdrop, title/artist, bar) ——————————
+      // Marquee (0.4.32): long titles/artists scroll instead of truncating.
+      // Short text stays centered + static. Enters from the right, ~8 px/s,
+      // 16px gap so the loop doesn't pop.
+      auto draw_scroll = [&](int y, const std::string &text, Color col) {
+        int text_px = (int) text.size() * 4;
+        if (text_px <= 64) { draw(0, y, text, col); return; }
+        int span = text_px + 16;
+        int off = (int) ((millis() / 120) % span);
+        int base = 64 - off;
+        for (int i = 0; i < (int) text.size(); i++) {
+          char ch = text[i];
+          int n = -1;
+          if (ch >= 'A' && ch <= 'Z') n = ch - 'A';
+          else if (ch >= 'a' && ch <= 'z') n = ch - 'a';
+          else if (ch >= '0' && ch <= '9') n = 26 + ch - '0';
+          else if (ch == ':') n = 36;
+          else if (ch == '-') n = 37;
+          else if (ch == '.') n = 38;
+          else if (ch == ',') n = 39;
+          else if (ch == '\'') n = 40;
+          else if (ch == '&') n = 41;
+          else if (ch == '!') n = 42;
+          else if (ch == '?') n = 43;
+          else if (ch == '/') n = 44;
+          else if (ch == '(') n = 45;
+          else if (ch == ')') n = 46;
+          else if (ch == '+') n = 47;
+          else if (ch == ' ') n = 48;
+          if (n < 0) continue;
+          int gx = base + i * 4;
+          for (int r = 0; r < 5; r++) for (int c = 0; c < 3; c++)
+            if (F[n] & (0x4000 >> (r * 3 + c))) {
+              int px = gx + c;
+              if (px >= 0 && px < 64)
+                it.draw_pixel_at(px, y + r, col);
+              if (px + 1 >= 0 && px + 1 < 64)
+                it.draw_pixel_at(px + 1, y + r + 1, Color::BLACK);
+            }
+        }
+      };
       // Full-panel backdrop: blurred + dimmed art (RGB565 from server).
       if (bd_have) {
         for (int py = 0; py < 32; py++)
@@ -668,9 +749,9 @@ display:
                                            (v & 0x1f) << 3));
           }
       }
-      // Text floats on the dimmed backdrop, full width.
-      draw(0, 8, id(title_state), Color(245, 245, 245));
-      draw(0, 17, id(artist_state), Color(200, 200, 200));
+      // Text floats on the dimmed backdrop — scrolling marquee if long.
+      draw_scroll(8, id(title_state), Color(245, 245, 245));
+      draw_scroll(17, id(artist_state), Color(200, 200, 200));
       // Dynamic time/progress/status area. Interpolate smoothly between 5s
       // server polls, then lag the bar by the calibrated audio offset so it
       // matches the device's delayed playback (item 1: calibrated, with the
